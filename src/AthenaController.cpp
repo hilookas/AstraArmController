@@ -28,39 +28,79 @@ void InitScreen(){
 
 SMS_STS sts;
 
-#ifndef AS_LEADER
-#endif
-
-int ctrl_cnt;
-uint32_t last_stat_time;
-
 void setupTorque(int enable) {
-#ifdef AS_LEADER
   sts.EnableTorque(11, enable);
+#ifdef AS_LEADER
   sts.EnableTorque(12, enable);
   sts.EnableTorque(13, enable);
-  sts.EnableTorque(14, enable);
-  sts.EnableTorque(15, enable);
-  sts.EnableTorque(16, enable);
-  sts.EnableTorque(17, enable);
-  sts.EnableTorque(18, enable);
-  if (enable != 1) {
-    sts.EnableTorque(19, enable);
-  }
 #else
-  sts.EnableTorque(11, enable);
   sts.EnableTorque(7, enable);
   sts.EnableTorque(8, enable);
   sts.EnableTorque(5, enable);
   sts.EnableTorque(6, enable);
+#endif
   sts.EnableTorque(14, enable);
   sts.EnableTorque(15, enable);
   sts.EnableTorque(16, enable);
   sts.EnableTorque(17, enable);
   sts.EnableTorque(18, enable);
+#ifdef AS_LEADER
+  if (enable != 1) {
+    sts.EnableTorque(19, enable);
+  }
+#else
   sts.EnableTorque(19, enable);
+  sts.writeWord(19, SMS_STS_TORQUE_LIMIT_L, 500); // 保护舵机
 #endif
 }
+
+void doPose(uint16_t pos[], int servo_speed = 32766) {
+  // 舵机编码器值范围 [0,4096) 对应 [0,2*PI) L形态各个关节为中值2048
+  int servo_acc = 254;
+  sts.WritePosEx(11, pos[0], servo_speed, servo_acc);
+#ifdef AS_LEADER
+  sts.WritePosEx(12, pos[1], servo_speed, servo_acc);
+  sts.WritePosEx(13, 2048 - ((int)pos[1] - 2048), servo_speed, servo_acc);
+#else
+  sts.WritePosEx(7, pos[1], servo_speed, servo_acc);
+  sts.WritePosEx(8, 2048 - ((int)pos[1] - 2048), servo_speed, servo_acc);
+  sts.WritePosEx(5, pos[1], servo_speed, servo_acc);
+  sts.WritePosEx(6, 2048 - ((int)pos[1] - 2048), servo_speed, servo_acc);
+#endif
+  sts.WritePosEx(14, pos[2], servo_speed, servo_acc);
+  sts.WritePosEx(15, 2048 - ((int)pos[2] - 2048), servo_speed, servo_acc);
+  sts.WritePosEx(16, pos[3], servo_speed, servo_acc);
+  sts.WritePosEx(17, pos[4], servo_speed, servo_acc);
+  sts.WritePosEx(18, pos[5], servo_speed, servo_acc);
+#ifndef AS_LEADER
+  // sts.WritePosEx(19, pos[6], servo_speed, servo_acc);
+#else
+  sts.WritePosEx(19, pos[6], servo_speed, servo_acc);
+#endif
+}
+
+void readPose(uint16_t pos[]) {
+  pos[0] = sts.ReadPos(11);
+#ifdef AS_LEADER
+  pos[1] = sts.ReadPos(12);
+#else
+  pos[1] = sts.ReadPos(7);
+#endif
+  pos[2] = sts.ReadPos(14);
+  pos[3] = sts.ReadPos(16);
+  pos[4] = sts.ReadPos(17);
+  pos[5] = sts.ReadPos(18);
+  pos[6] = sts.ReadPos(19);
+}
+
+int ctrl_cnt;
+int feedback_cnt;
+uint32_t last_stat_time;
+
+uint32_t last_action_time;
+
+uint32_t last_ping_time;
+uint32_t last_pong_time;
 
 void setup() {
   memset(err_cnt, 0, sizeof err_cnt);
@@ -77,145 +117,103 @@ void setup() {
   
   setupTorque(0);
 
-#ifdef AS_LEADER
-  sts.writeByte(19, SMS_STS_MODE, 0); // 位置
-#else
-  sts.writeWord(19, SMS_STS_TORQUE_LIMIT_L, 500); // 保护舵机
-
   // uint16_t pos[7];
   // readPose(pos);
   // EIShaperInit(pos);
-#endif
   
   ctrl_cnt = 0;
+  feedback_cnt = 0;
   last_stat_time = millis();
-}
 
-void doPose(uint16_t pos[], int servo_speed = 32766) {
-  // 舵机编码器值范围 [0,4096) 对应 [0,2*PI) L形态各个关节为中值2048
-  int servo_acc = 254;
-#ifdef AS_LEADER
-  sts.WritePosEx(11, pos[0], servo_speed, servo_acc);
-  sts.WritePosEx(12, pos[1], servo_speed, servo_acc);
-  sts.WritePosEx(13, 2048 - ((int)pos[1] - 2048), servo_speed, servo_acc);
-  sts.WritePosEx(14, pos[2], servo_speed, servo_acc);
-  sts.WritePosEx(15, 2048 - ((int)pos[2] - 2048), servo_speed, servo_acc);
-  sts.WritePosEx(16, pos[3], servo_speed, servo_acc);
-  sts.WritePosEx(17, pos[4], servo_speed, servo_acc);
-  sts.WritePosEx(18, pos[5], servo_speed, servo_acc);
-  // sts.WritePosEx(19, pos[6], servo_speed, servo_acc);
-#else
-  sts.WritePosEx(11, pos[0], servo_speed, servo_acc);
-  sts.WritePosEx(7, pos[1], servo_speed, servo_acc);
-  sts.WritePosEx(8, 2048 - ((int)pos[1] - 2048), servo_speed, servo_acc);
-  sts.WritePosEx(5, pos[1], servo_speed, servo_acc);
-  sts.WritePosEx(6, 2048 - ((int)pos[1] - 2048), servo_speed, servo_acc);
-  sts.WritePosEx(14, pos[2], servo_speed, servo_acc);
-  sts.WritePosEx(15, 2048 - ((int)pos[2] - 2048), servo_speed, servo_acc);
-  sts.WritePosEx(16, pos[3], servo_speed, servo_acc);
-  sts.WritePosEx(17, pos[4], servo_speed, servo_acc);
-  sts.WritePosEx(18, pos[5], servo_speed, servo_acc);
-  sts.WritePosEx(19, pos[6], servo_speed, servo_acc);
-#endif
-}
+  last_action_time = millis();
 
-void readPose(uint16_t pos[]) {
-#ifdef AS_LEADER
-  pos[0] = sts.ReadPos(11);
-  pos[1] = sts.ReadPos(12);
-  pos[2] = sts.ReadPos(14);
-  pos[3] = sts.ReadPos(16);
-  pos[4] = sts.ReadPos(17);
-  pos[5] = sts.ReadPos(18);
-  pos[6] = sts.ReadPos(19);
-#else
-  pos[0] = sts.ReadPos(11);
-  pos[1] = sts.ReadPos(7);
-  pos[2] = sts.ReadPos(14);
-  pos[3] = sts.ReadPos(16);
-  pos[4] = sts.ReadPos(17);
-  pos[5] = sts.ReadPos(18);
-  pos[6] = sts.ReadPos(19);
-#endif
+  last_ping_time = 0;
+  last_pong_time = 0;
 }
 
 void loop() {
-#ifdef AS_LEADER
   comm_type_t type;
   uint8_t buf[20];
   bool ret = comm_recv_poll_last(&type, buf);
 
   if (!ret) {
     // TODO PING PONG
-    if (type == COMM_TYPE_TORQUE) {
+    if (type == COMM_TYPE_PING) {
+      comm_send_blocking(COMM_TYPE_PONG, buf);
+    } else if (type == COMM_TYPE_PONG) {
+      last_pong_time = millis();
+    } else if (type == COMM_TYPE_TORQUE) {
       setupTorque(buf[0]);
+    } else if (type == COMM_TYPE_CTRL) {
+      last_action_time = millis();
+
+      uint16_t pos[7];
+      memcpy(pos, buf, sizeof pos);
+      for (int i = 0; i < 7; ++i) pos[i] = ntohs(pos[i]);
+
+      // EIShaper
+      // EIShaperApply(pos);
+
+      ++ctrl_cnt;
+      doPose(pos);
+
+      ++feedback_cnt;
+      readPose(pos);
+
+      for (int i = 0; i < 7; ++i) pos[i] = htons(pos[i]);
+      comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
     } else {
       ++err_cnt[2];
     }
   }
 
-  uint16_t pos[7];
-  readPose(pos);
+  uint32_t this_action_time = millis();
+  if (this_action_time - last_action_time > 10) { // 每隔 10ms执行一次
+    last_action_time = this_action_time;
 
-  for (int i = 0; i < 7; ++i) pos[i] = htons(pos[i]);
+    uint16_t pos[7];
+    ++feedback_cnt;
+    readPose(pos);
 
-  comm_send_blocking(COMM_TYPE_CTRL, (uint8_t *)pos);
+    for (int i = 0; i < 7; ++i) pos[i] = htons(pos[i]);
+    comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
 
-  delay(10); // 确保不超过follower 240Hz处理上限（由通信频率限制）
-  // delay(3): 190Hz
-  // delay(10): 81Hz
+#ifndef AS_LEADER
+    // follower 已经10ms没有收到信号了
+    ++err_cnt[2];
+#endif
+  }
 
-  ++ctrl_cnt;
-  uint32_t this_time = millis();
-  if (this_time - last_stat_time > 1000) {
-    float ctrl_freq = (float)ctrl_cnt / (this_time - last_stat_time) * 1000;
-
+  uint32_t this_stat_time = millis();
+  if (this_stat_time - last_stat_time > 1000) {
     // Update Display
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
     display.setCursor(0,0);
+
+    float ctrl_freq = (float)ctrl_cnt / (this_stat_time - last_stat_time) * 1000;
+    float feeback_freq = (float)feedback_cnt / (this_stat_time - last_stat_time) * 1000;
+    ctrl_cnt = 0;
+    feedback_cnt = 0;
+#ifdef AS_LEADER
+    // Row1
+    display.print(millis() / 1000); display.print(F("s ")); display.print(feeback_freq); display.print(F("Hz ")); display.print(err_cnt[0]); display.print(F(" ")); display.print(err_cnt[1]); display.print(F(" ")); display.print(err_cnt[2]); display.println();
+#else
     // Row1
     display.print(millis() / 1000); display.print(F("s ")); display.print(ctrl_freq); display.print(F("Hz ")); display.print(err_cnt[0]); display.print(F(" ")); display.print(err_cnt[1]); display.print(F(" ")); display.print(err_cnt[2]); display.println();
+#endif
+
+#ifdef AS_LEADER
+    // Row2
+    display.print("ping: "); if (last_pong_time == 0) { display.print(F("INF")); } else { display.print((int)last_pong_time - last_ping_time); } display.print("ms"); display.println();
     display.display();
-
-    ctrl_cnt = 0;
-    last_stat_time = this_time;
-  }
+    
+    last_ping_time = millis();
+    last_pong_time = 0;
+    memset(buf, 0, sizeof buf);
+    comm_send_blocking(COMM_TYPE_PING, buf);
 #else
-  comm_type_t type;
-  uint16_t pos[7];
-  bool ret = comm_recv_poll_last(&type, (uint8_t *)pos);
-  // TODO PING PONG and TORQUE
-  if (ret) {
-    delay(1);
-    return;
-  }
-
-  if (type != COMM_TYPE_CTRL) {
-    ++err_cnt[2];
-    return;
-  }
-  
-  for (int i = 0; i < 7; ++i) pos[i] = ntohs(pos[i]);
-
-  // EIShaper
-  // EIShaperApply(pos);
-
-  doPose(pos);
-
-  readPose(pos); // 回传qpos // 会极大降低速度
-
-  for (int i = 0; i < 7; ++i) pos[i] = htons(pos[i]);
-
-  comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
-
-  ++ctrl_cnt;
-  uint32_t this_time = millis();
-  if (this_time - last_stat_time > 1000) {
-    float ctrl_freq = (float)ctrl_cnt / (this_time - last_stat_time) * 1000;
-    // Serial.printf("crtl freq: %.2fHz\n", ctrl_freq);
-
     int servos[] = { 11, 7, 8, 5, 6, 14, 15, 16, 17, 18, 19 };
     //                0  1  2  3  4   5   6   7   8   9  10
     const int servos_cnt = 11;
@@ -237,22 +235,17 @@ void loop() {
     }
     // Serial.printf("voltage: %f, current_all: %f\n", voltage_all, current_all);
 
-    // Update Display
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0,0);
-    // Row1
-    display.print(millis() / 1000); display.print(F("s ")); display.print(ctrl_freq); display.print(F("Hz ")); display.print(err_cnt[0]); display.print(F(" ")); display.print(err_cnt[1]); display.print(F(" ")); display.print(err_cnt[2]); display.println();
     // Row2
     display.print(voltage_all); display.print(F("V ")); display.print(current_all); display.print(F("mA")); display.println();
     // Row3,4
     display.print((int)currents[1]); display.print(F("+")); display.print((int)currents[2]); display.print(F("+")); display.print((int)currents[3]); display.print(F("+")); display.print((int)currents[4]); display.print(F(" ")); display.print((int)currents[5]); display.print(F("+")); display.print((int)currents[6]); display.println();
     display.print((int)currents[0]); display.print(F(" ")); display.print((int)currents[7]); display.print(F(" ")); display.print((int)currents[8]); display.print(F(" ")); display.print((int)currents[9]); display.println(); 
+#endif
+
     display.display();
 
-    ctrl_cnt = 0;
-    last_stat_time = this_time;
+    last_stat_time = this_stat_time;
   }
-#endif
+  
+  delay(1); // 让出线程
 }

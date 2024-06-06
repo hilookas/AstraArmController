@@ -3,6 +3,6 @@
 
 extern int err_cnt[10];
 
-#define AS_LEADER // lookas
+// #define AS_LEADER // lookas
 
 #endif
