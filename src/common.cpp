@@ -1,0 +1,1 @@
+int err_cnt[10];

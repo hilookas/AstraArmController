@@ -2,170 +2,9 @@
 #include <SCServo.h>
 #include <lwip/sockets.h>
 #include <Adafruit_SSD1306.h>
-
-#define AS_LEADER // lookas
-
-int err_cnt[10];
-
-// FUCK YOU ARDUINO https://arduino.stackexchange.com/questions/66530/class-enum-was-not-declared-in-this-scope
-typedef enum {
-  COMM_TYPE_PING,
-  COMM_TYPE_PONG,
-  COMM_TYPE_CTRL,
-  COMM_TYPE_FEEDBACK,
-  COMM_TYPE_TORQUE,
-} comm_type_t;
-
-// 初始化串口
-// 返回是否发生错误
-bool serial_init(void) {
-  Serial.begin(921600);
-  while (!Serial) delay(1);
-  return false;
-}
-
-// 堵塞输出一个字符
-// c 为要发送的字符
-// 返回是否发生错误
-bool serial_send_blocking(uint8_t c) {
-  Serial.write(c);
-  return false;
-}
-
-// 非堵塞轮询一个字符
-// c 为要接受的字符
-// 返回是否发生错误
-bool serial_recv_poll(uint8_t *c) {
-  // 线程不安全！！！
-  if (Serial.available()) {
-    *c = Serial.read();
-    return false;
-  } else {
-    return true;
-  }
-}
-
-#define COMM_PAYLOAD_SIZE_MAX 100
-
-// typedef enum {
-//   COMM_TYPE_PING,
-//   COMM_TYPE_PONG,
-//   COMM_TYPE_CTRL,
-//   COMM_TYPE_FEEDBACK,
-//   COMM_TYPE_TORQUE,
-// } comm_type_t;
-
-// 不同类型的数据包大小
-int comm_payload_size[] = {
-  14, // COMM_TYPE_PING
-  14, // COMM_TYPE_PONG
-  14, // COMM_TYPE_CTRL
-  14, // COMM_TYPE_FEEDBACK
-  14, // COMM_TYPE_TORQUE
-};
-
-// 不能被忽略的数据包
-// 置为 true 会导致 comm_recv_poll_last 不跳过这个数据包
-// 但是将其置为 true 并不会
-bool comm_type_importance[] = {
-  false, // COMM_TYPE_PING
-  false, // COMM_TYPE_PONG
-  false, // COMM_TYPE_CTRL
-  false, // COMM_TYPE_FEEDBACK
-  true,  // COMM_TYPE_TORQUE
-};
-
-// 堵塞发送一个数据包
-// type 传递数据类型，payload 传递实际数据
-// 返回是否发生错误
-bool comm_send_blocking(comm_type_t type, const uint8_t payload[]) {
-  bool ret;
-  ret = serial_send_blocking(0x5A); // 0b01011010 as header
-  if (ret) return true;
-  ret = serial_send_blocking((uint8_t)type); // 0b01011010 as header
-  if (ret) return true;
-  for (int i = 0; i < comm_payload_size[type]; ++i) {
-    ret = serial_send_blocking(payload[i]);
-    if (ret) return true;
-  }
-  return false;
-}
-
-static uint8_t recv_buf[2 + COMM_PAYLOAD_SIZE_MAX];
-static int recv_buf_p;
-
-// 尝试接收一个数据包
-// 如果没有发生错误，则 *type 内为接收到的数据包类型，payload 为接收到的实际数据
-// 返回是否发生错误
-// 这个函数发生错误十分正常，在没有接收到数据的时候，就会返回错误（不阻塞）
-bool comm_recv_poll(comm_type_t *type, uint8_t payload[]) {
-  bool ret;
-  while (true) {
-    uint8_t buf;
-    ret = serial_recv_poll(&buf);
-    if (ret) return true; // 没有新数据
-
-    // 无效数据
-    if (recv_buf_p == 0 && buf != 0x5A) {
-      err_cnt[0] += 1;
-      // fprintf(stderr, "comm: warning: Received wrong byte!");
-      continue;
-    }
-    recv_buf[recv_buf_p++] = buf;
-
-    // 缓冲区太小存不下完整数据包
-    assert(recv_buf_p <= sizeof recv_buf);
-
-    // 收到未知类型的数据包
-    // assert(recv_buf_p != 2 || recv_buf[1] < (sizeof comm_payload_size) / (sizeof comm_payload_size[0]));
-    if (recv_buf_p == 2 && recv_buf[1] >= (sizeof comm_payload_size) / (sizeof comm_payload_size[0])) {
-      err_cnt[1] += 1;
-      // fprintf(stderr, "comm: warning: Received wrong type!");
-      recv_buf_p = 0; // 重置状态
-      continue;
-    }
-
-    // 数据包到结尾了
-    if (recv_buf_p >= 2 && recv_buf_p == 2 + comm_payload_size[recv_buf[1]]) {
-      // 复制数据输出
-      *type = (comm_type_t)recv_buf[1];
-      memcpy(payload, recv_buf + 2, comm_payload_size[recv_buf[1]]);
-      // 清空缓冲区
-      recv_buf_p = 0;
-      break;
-    }
-    // TODO 增加超时机制
-  }
-  return false;
-}
-
-// 尽量清空读缓冲区（同步两台设备的周期），并且返回最后一组数据
-// 如果没有发生错误，则 *type 内为接收到的数据包类型，payload 为接收到的实际数据
-// 返回是否发生错误
-// 这个函数发生错误十分正常，在没有接收到数据的时候，就会返回错误（不阻塞）
-// 注意：这个函数会导致部分回传的数据包丢包（如果处理的节奏跟不上的话）
-// 但是必要的丢包是值得的，否则缓冲区会被堆积，实时性无法得到保证
-bool comm_recv_poll_last(comm_type_t *type, uint8_t payload[]) {
-  bool last_ret = true; // 默认为没有数据（发生错误）
-  
-  bool ret = comm_recv_poll(type, payload);
-  while (!ret) {
-    if (comm_type_importance[*type]) { // 不能被忽略的数据包
-      return ret;
-    }
-    last_ret = ret;
-    ret = comm_recv_poll(type, payload);
-  }
-  return ret = last_ret;
-}
-
-// 返回是否发生错误
-bool comm_init(void) {
-  bool ret = serial_init();
-  if (ret) return true; // 没有新数据
-  recv_buf_p = 0;
-  return false;
-}
+#include "common.h"
+#include "EIShaper.h"
+#include "comm.h"
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels, 32 as default.
@@ -190,86 +29,6 @@ void InitScreen(){
 SMS_STS sts;
 
 #ifndef AS_LEADER
-const int EIShaperBufLen = 128;
-uint16_t EIShaperBuf[EIShaperBufLen][7];
-int EIShaperCur;
-
-int EIShaperT2, EIShaperT3;
-float EIShaperT2_1, EIShaperT2_2, EIShaperT3_1, EIShaperT3_2;
-float EIShaperA1, EIShaperA2, EIShaperA3;
-
-void EIShaperInit() {
-  float freq = 5.5; // 要消除的振动频率 ESSENTIAL!
-  float omega = 2 * M_PI * freq;
-  float zeta = 0.01; // useless
-
-  // 计算EI整形器需要的各个延时环节系数，以及增益
-  float t1 = 0;
-  float t2 = M_PI / omega;
-  float t3 = 2*t2;
-  float V = 0.05; // 抑制参数 ESSENTIAL!
-  float A1 = (1+V)/4;
-  float A2 = (1-V)/2;
-  float A3 = (1+V)/4;
-
-  // 离散化处理
-  // ctrl freq 计算公式
-  // 220*(9*((7+7+6)*8+250) + 16*8*1000000/115200)
-  float ctrl_freq = 48; // 控制频率 ESSENTIAL!
-  float ctrl_period_T = 1 / ctrl_freq; // ~5ms
-  float t2_discrete = t2 / ctrl_period_T;
-  float t3_discrete = t3 / ctrl_period_T;
-  assert(t3_discrete + 1 < EIShaperBufLen);
-
-  // 保存到全局变量
-  EIShaperT2 = t2_discrete; // float2int
-  EIShaperT3 = t3_discrete; // float2int
-  // 防止几个时间太接近影响效果
-  assert(EIShaperT2 != 0);
-  assert(EIShaperT2 != EIShaperT3);
-  // 插值用
-  EIShaperT2_1 = t2_discrete - EIShaperT2;
-  EIShaperT2_2 = 1 - EIShaperT2_1;
-  EIShaperT3_1 = t3_discrete - EIShaperT3;
-  EIShaperT3_2 = 1 - EIShaperT3_1;
-  assert(0 <= EIShaperT2_1 && EIShaperT2_1 <= 1);
-  assert(0 <= EIShaperT2_2 && EIShaperT2_2 <= 1);
-  assert(0 <= EIShaperT3_1 && EIShaperT3_1 <= 1);
-  assert(0 <= EIShaperT3_2 && EIShaperT3_2 <= 1);
-  EIShaperA1 = A1;
-  EIShaperA2 = A2;
-  EIShaperA3 = A3;
-
-  // 初始化 buffer
-  uint16_t pos[7];
-  readPose(pos);
-  for (int i = 0; i < EIShaperBufLen; ++i) {
-    memcpy(EIShaperBuf[i], pos, sizeof pos);
-  }
-  
-  // Serial.printf("EI Shaper!\n");
-  // Serial.printf("t1: %f, t2: %f, t3: %f\n", t1, t2, t3);
-  // Serial.printf("A1: %f, A2: %f, A3: %f\n", A1, A2, A3);
-  // Serial.printf("t2_discrete: %f, t3_discrete: %f\n", t2_discrete, t3_discrete);
-}
-
-void EIShaperApply(uint16_t pos[]) {
-  ++EIShaperCur;
-  EIShaperCur %= EIShaperBufLen;
-  // memcpy(EIShaperBuf[EIShaperCur], pos, sizeof pos); // 错误的，pos此时是指针，不是数组，所以sizeof结果不是14而是4
-  memcpy(EIShaperBuf[EIShaperCur], pos, 2 * 7); // 先存一下原始数据
-
-  int t2 = (EIShaperCur - EIShaperT2 + EIShaperBufLen) % EIShaperBufLen;
-  int t3 = (EIShaperCur - EIShaperT3 + EIShaperBufLen) % EIShaperBufLen;
-  int t2_2 = (t2 - 1 + EIShaperBufLen) % EIShaperBufLen;
-  int t3_2 = (t3 - 1 + EIShaperBufLen) % EIShaperBufLen;
-
-  for (int i = 0; i < 7; ++i) {
-    pos[i] = pos[i] * EIShaperA1
-      + (EIShaperBuf[t2][i] * EIShaperT2_2 + EIShaperBuf[t2_2][i] * EIShaperT2_1) * EIShaperA2
-      + (EIShaperBuf[t3][i] * EIShaperT3_2 + EIShaperBuf[t3_2][i] * EIShaperT3_1) * EIShaperA3;
-  }
-}
 #endif
 
 int ctrl_cnt;
@@ -323,7 +82,9 @@ void setup() {
 #else
   sts.writeWord(19, SMS_STS_TORQUE_LIMIT_L, 500); // 保护舵机
 
-  EIShaperInit();
+  // uint16_t pos[7];
+  // readPose(pos);
+  // EIShaperInit(pos);
 #endif
   
   ctrl_cnt = 0;
@@ -439,7 +200,7 @@ void loop() {
   for (int i = 0; i < 7; ++i) pos[i] = ntohs(pos[i]);
 
   // EIShaper
-  EIShaperApply(pos);
+  // EIShaperApply(pos);
 
   doPose(pos);
 
