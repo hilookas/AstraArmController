@@ -72,7 +72,7 @@ void doPose(uint16_t pos[], int servo_speed = 32766) {
   sts.WritePosEx(16, pos[3], servo_speed, servo_acc);
   sts.WritePosEx(17, pos[4], servo_speed, servo_acc);
   sts.WritePosEx(18, pos[5], servo_speed, servo_acc);
-#ifndef AS_LEADER
+#ifdef AS_LEADER
   // sts.WritePosEx(19, pos[6], servo_speed, servo_acc);
 #else
   sts.WritePosEx(19, pos[6], servo_speed, servo_acc);
