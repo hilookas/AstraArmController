@@ -2,9 +2,11 @@
 #include <SCServo.h>
 #include <lwip/sockets.h>
 #include <Adafruit_SSD1306.h>
-#include "common.h"
 #include "EIShaper.h"
 #include "comm.h"
+#include "main.h"
+
+int err_cnt[10];
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels, 32 as default.

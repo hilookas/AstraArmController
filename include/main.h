@@ -1,5 +1,5 @@
-#ifndef _COMMON_H_
-#define _COMMON_H_
+#ifndef _MAIN_H_
+#define _MAIN_H_
 
 extern int err_cnt[10];
 

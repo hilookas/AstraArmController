@@ -1,7 +1,7 @@
 #include "comm.h"
 #include <string.h>
 #include <Arduino.h>
-#include "common.h"
+#include "main.h"
 
 // 初始化串口
 // 返回是否发生错误
