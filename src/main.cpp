@@ -5,6 +5,89 @@
 #include "EIShaper.h"
 #include "comm.h"
 #include "main.h"
+#include <FS.h>
+#include <LittleFS.h>
+
+config_t config;
+
+void write_config() {
+  Serial.println("Writing config");
+
+  File file = LittleFS.open("/config.txt", FILE_WRITE);
+  if (!file) {
+    Serial.println("Failed to open file for writing");
+    return;
+  }
+
+  if (file.write((uint8_t *)&config, sizeof config) == 0) {
+    Serial.println("Write failed");
+    file.close();
+    return;
+  }
+
+  file.close();
+}
+
+void print_config() {
+  Serial.print("config version: "); Serial.println(config.version);
+  Serial.print("1 EIShaper_enabled: "); Serial.println(config.EIShaper_enabled);
+  Serial.print("2 EIShaper_freq: "); Serial.println(config.EIShaper_freq);
+  Serial.print("3 EIShaper_V: "); Serial.println(config.EIShaper_V);
+  Serial.print("4 EIShaper_ctrl_freq: "); Serial.println(config.EIShaper_ctrl_freq);
+  Serial.print("5 servo_speed: "); Serial.println(config.servo_speed);
+  Serial.print("6 servo_acc: "); Serial.println(config.servo_acc);
+  Serial.print("7 servo_backlash: "); Serial.println(config.servo_backlash);
+  Serial.print("8 servo_backlash2: "); Serial.println(config.servo_backlash2);
+}
+
+void read_config() {
+  if (!LittleFS.begin(true)) {
+    Serial.println("LittleFS Mount Failed");
+    return;
+  }
+
+  File file = LittleFS.open("/config.txt");
+  if (!file) {
+    Serial.println("Failed to open file for reading");
+
+    Serial.println("Initing config");
+    write_config();
+    return;
+  }
+
+  if (file.isDirectory()) {
+    Serial.println("Is dir?");
+    file.close();
+    return;
+  }
+
+  config_t temp_config;
+  size_t read_size = file.read((uint8_t *)&temp_config, sizeof temp_config);
+  if (read_size != (sizeof temp_config)) {
+    Serial.println("Wrong size.");
+    file.close();
+    
+    Serial.println("Initing config");
+    write_config();
+    return;
+  }
+
+  if (temp_config.version != config.version) {
+    Serial.println("Wrong version");
+    file.close();
+    
+    Serial.println("Initing config");
+    write_config();
+    return;
+  }
+
+  memcpy((uint8_t *)&config, (uint8_t *)&temp_config, sizeof config);
+
+  Serial.println("Config read");
+  print_config();
+
+  file.close();
+}
 
 int err_cnt[10];
 
@@ -13,7 +96,7 @@ int err_cnt[10];
 #define OLED_RESET -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-void InitScreen(){
+void InitScreen() {
 // the IIC used to control OLED screen.
 // GPIO 21 - S_SDA, GPIO 22 - S_SCL, as default.
 #define S_SCL 22
@@ -21,7 +104,7 @@ void InitScreen(){
   Wire.begin(S_SDA, S_SCL);
 // SSD1306: 0x3C
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
-  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
   }
   display.clearDisplay();
@@ -56,20 +139,24 @@ void setupTorque(int enable) {
 #endif
 }
 
-void doPose(uint16_t pos[], int servo_speed = 32766) {
+void doPose(uint16_t pos[]) {
   // 舵机编码器值范围 [0,4096) 对应 [0,2*PI) L形态各个关节为中值2048
-  int servo_acc = 254;
+  int servo_speed = config.servo_speed; // 32766
+  int servo_acc = config.servo_acc; // max: 256
   sts.WritePosEx(11, pos[0], servo_speed, servo_acc);
 #ifdef AS_LEADER
   sts.WritePosEx(12, pos[1], servo_speed, servo_acc);
   sts.WritePosEx(13, 2048 - ((int)pos[1] - 2048), servo_speed, servo_acc);
 #else
-  sts.WritePosEx(7, pos[1], servo_speed, servo_acc);
+  int backslash = config.servo_backlash;
+  int backslash2 = config.servo_backlash2;
+  Serial.println(backslash);
+  sts.WritePosEx(7, pos[1] + backslash, servo_speed, servo_acc);
   sts.WritePosEx(8, 2048 - ((int)pos[1] - 2048), servo_speed, servo_acc);
-  sts.WritePosEx(5, pos[1], servo_speed, servo_acc);
+  sts.WritePosEx(5, pos[1] + backslash, servo_speed, servo_acc);
   sts.WritePosEx(6, 2048 - ((int)pos[1] - 2048), servo_speed, servo_acc);
 #endif
-  sts.WritePosEx(14, pos[2], servo_speed, servo_acc);
+  sts.WritePosEx(14, pos[2] + backslash2, servo_speed, servo_acc);
   sts.WritePosEx(15, 2048 - ((int)pos[2] - 2048), servo_speed, servo_acc);
   sts.WritePosEx(16, pos[3], servo_speed, servo_acc);
   sts.WritePosEx(17, pos[4], servo_speed, servo_acc);
@@ -111,6 +198,8 @@ void setup() {
 
   InitScreen();
 
+  read_config();
+
 #define S_RXD 18
 #define S_TXD 19
   Serial1.begin(1000000, SERIAL_8N1, S_RXD, S_TXD);
@@ -119,9 +208,11 @@ void setup() {
   
   setupTorque(0);
 
-  // uint16_t pos[7];
-  // readPose(pos);
-  // EIShaperInit(pos);
+  uint16_t pos[7];
+  readPose(pos);
+  if (config.EIShaper_enabled) {
+    EIShaperInit(pos);
+  }
   
   ctrl_cnt = 0;
   feedback_cnt = 0;
@@ -154,7 +245,9 @@ void loop() {
       for (int i = 0; i < 7; ++i) pos[i] = ntohs(pos[i]);
 
       // EIShaper
-      // EIShaperApply(pos);
+      if (config.EIShaper_enabled) {
+        EIShaperApply(pos);
+      }
 
       ++ctrl_cnt;
       doPose(pos);
@@ -164,14 +257,103 @@ void loop() {
 
       for (int i = 0; i < 7; ++i) pos[i] = htons(pos[i]);
       comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
+    } else if (type == COMM_TYPE_CONFIG_WRITE || type == COMM_TYPE_CONFIG_READ) {
+      uint32_t cmd[2];
+      memcpy(cmd, buf, sizeof cmd);
+      for (int i = 0; i < 2; ++i) cmd[i] = ntohl(cmd[i]);
+      
+      if (cmd[0] == 0x01) {
+        if (type == COMM_TYPE_CONFIG_WRITE) {
+          config.EIShaper_enabled = (bool)cmd[1];
+          write_config();
+          print_config();
+          uint16_t pos[7];
+          readPose(pos);
+          if (config.EIShaper_enabled) {
+            EIShaperInit(pos);
+          }
+        }
+        cmd[1] = (uint32_t)config.EIShaper_enabled;
+      } else if (cmd[0] == 0x02) {
+        if (type == COMM_TYPE_CONFIG_WRITE) {
+          config.EIShaper_freq = *(float *)&(cmd[1]);
+          write_config();
+          print_config();
+          uint16_t pos[7];
+          readPose(pos);
+          if (config.EIShaper_enabled) {
+            EIShaperInit(pos);
+          }
+        }
+        cmd[1] = *(uint32_t *)&(config.EIShaper_freq);
+      } else if (cmd[0] == 0x03) {
+        if (type == COMM_TYPE_CONFIG_WRITE) {
+          config.EIShaper_V = *(float *)&(cmd[1]);
+          write_config();
+          print_config();
+          uint16_t pos[7];
+          readPose(pos);
+          if (config.EIShaper_enabled) {
+            EIShaperInit(pos);
+          }
+        }
+        cmd[1] = *(uint32_t *)&(config.EIShaper_V);
+      } else if (cmd[0] == 0x04) {
+        if (type == COMM_TYPE_CONFIG_WRITE) {
+          config.EIShaper_ctrl_freq = *(float *)&(cmd[1]);
+          write_config();
+          print_config();
+          uint16_t pos[7];
+          readPose(pos);
+          if (config.EIShaper_enabled) {
+            EIShaperInit(pos);
+          }
+        }
+        cmd[1] = *(uint32_t *)&(config.EIShaper_ctrl_freq);
+      } else if (cmd[0] == 0x05) {
+        if (type == COMM_TYPE_CONFIG_WRITE) {
+          config.servo_speed = (cmd[1]);
+          write_config();
+          print_config();
+        }
+        cmd[1] = (config.servo_speed);
+      } else if (cmd[0] == 0x06) {
+        if (type == COMM_TYPE_CONFIG_WRITE) {
+          config.servo_acc = (cmd[1]);
+          write_config();
+          print_config();
+        }
+        cmd[1] = (config.servo_acc);
+      } else if (cmd[0] == 0x07) {
+        if (type == COMM_TYPE_CONFIG_WRITE) {
+          config.servo_backlash = (cmd[1]);
+          write_config();
+          print_config();
+        }
+        cmd[1] = (config.servo_backlash);
+      } else if (cmd[0] == 0x08) {
+        if (type == COMM_TYPE_CONFIG_WRITE) {
+          config.servo_backlash2 = (cmd[1]);
+          write_config();
+          print_config();
+        }
+        cmd[1] = (config.servo_backlash2);
+      } else {
+        Serial.println("Unknown command");
+      }
+
+      for (int i = 0; i < 2; ++i) cmd[i] = htonl(cmd[i]);
+      memcpy(buf, cmd, sizeof cmd);
+      comm_send_blocking(COMM_TYPE_CONFIG_FEEDBACK, (uint8_t *)buf);
     } else {
       ++err_cnt[2];
     }
   }
-
   uint32_t this_action_time = millis();
   if (this_action_time - last_action_time > 10) { // 每隔 10ms执行一次
     last_action_time = this_action_time;
+    
+    // Serial.println("No ctrl");
 
     uint16_t pos[7];
     ++feedback_cnt;

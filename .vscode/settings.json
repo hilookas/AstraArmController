@@ -1,6 +1,14 @@
 {
     "files.associations": {
         "*.ejs": "html",
-        "arduino.h": "c"
+        "arduino.h": "c",
+        "*.tcc": "cpp",
+        "array": "cpp",
+        "functional": "cpp",
+        "istream": "cpp",
+        "ostream": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp"
     }
 }

@@ -39,6 +39,9 @@ int comm_payload_size[] = {
   14, // COMM_TYPE_CTRL
   14, // COMM_TYPE_FEEDBACK
   14, // COMM_TYPE_TORQUE
+  14, // COMM_TYPE_CONFIG_WRITE
+  14, // COMM_TYPE_CONFIG_READ
+  14, // COMM_TYPE_CONFIG_FEEDBACK
 };
 
 // 不能被忽略的数据包
@@ -50,6 +53,9 @@ bool comm_type_importance[] = {
   false, // COMM_TYPE_CTRL
   false, // COMM_TYPE_FEEDBACK
   true,  // COMM_TYPE_TORQUE
+  true,  // COMM_TYPE_CONFIG_WRITE
+  true,  // COMM_TYPE_CONFIG_READ
+  true,  // COMM_TYPE_CONFIG_FEEDBACK
 };
 
 // 堵塞发送一个数据包

@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <main.h>
 
 const int EIShaperBufLen = 128;
 uint16_t EIShaperBuf[EIShaperBufLen][7];
@@ -9,7 +10,7 @@ float EIShaperT2_1, EIShaperT2_2, EIShaperT3_1, EIShaperT3_2;
 float EIShaperA1, EIShaperA2, EIShaperA3;
 
 void EIShaperInit(uint16_t pos[]) {
-  float freq = 5.5; // 要消除的振动频率 ESSENTIAL!
+  float freq = config.EIShaper_freq; // 要消除的振动频率 ESSENTIAL!
   float omega = 2 * M_PI * freq;
   float zeta = 0.01; // useless
 
@@ -17,7 +18,7 @@ void EIShaperInit(uint16_t pos[]) {
   float t1 = 0;
   float t2 = M_PI / omega;
   float t3 = 2*t2;
-  float V = 0.05; // 抑制参数 ESSENTIAL!
+  float V = config.EIShaper_V; // 抑制参数 ESSENTIAL!
   float A1 = (1+V)/4;
   float A2 = (1-V)/2;
   float A3 = (1+V)/4;
@@ -25,7 +26,7 @@ void EIShaperInit(uint16_t pos[]) {
   // 离散化处理
   // ctrl freq 计算公式
   // 220*(9*((7+7+6)*8+250) + 16*8*1000000/115200)
-  float ctrl_freq = 48; // 控制频率 ESSENTIAL!
+  float ctrl_freq = config.EIShaper_ctrl_freq; // 控制频率 ESSENTIAL!
   float ctrl_period_T = 1 / ctrl_freq; // ~5ms
   float t2_discrete = t2 / ctrl_period_T;
   float t3_discrete = t3 / ctrl_period_T;
@@ -55,10 +56,10 @@ void EIShaperInit(uint16_t pos[]) {
     memcpy(EIShaperBuf[i], pos, 2 * 7);
   }
   
-  // Serial.printf("EI Shaper!\n");
-  // Serial.printf("t1: %f, t2: %f, t3: %f\n", t1, t2, t3);
-  // Serial.printf("A1: %f, A2: %f, A3: %f\n", A1, A2, A3);
-  // Serial.printf("t2_discrete: %f, t3_discrete: %f\n", t2_discrete, t3_discrete);
+  Serial.printf("EI Shaper!\n");
+  Serial.printf("t1: %f, t2: %f, t3: %f\n", t1, t2, t3);
+  Serial.printf("A1: %f, A2: %f, A3: %f\n", A1, A2, A3);
+  Serial.printf("t2_discrete: %f, t3_discrete: %f\n", t2_discrete, t3_discrete);
 }
 
 void EIShaperApply(uint16_t pos[]) {
