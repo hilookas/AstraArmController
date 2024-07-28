@@ -208,7 +208,7 @@ void setup() {
   
   setupTorque(0);
 
-  uint16_t pos[7];
+  uint16_t pos[8];
   readPose(pos);
   if (config.EIShaper_enabled) {
     EIShaperInit(pos);
@@ -240,7 +240,7 @@ void loop() {
     } else if (type == COMM_TYPE_CTRL) {
       last_action_time = millis();
 
-      uint16_t pos[7];
+      uint16_t pos[8];
       memcpy(pos, buf, sizeof pos);
       for (int i = 0; i < 7; ++i) pos[i] = ntohs(pos[i]);
 
@@ -267,7 +267,7 @@ void loop() {
           config.EIShaper_enabled = (bool)cmd[1];
           write_config();
           print_config();
-          uint16_t pos[7];
+          uint16_t pos[8];
           readPose(pos);
           if (config.EIShaper_enabled) {
             EIShaperInit(pos);
@@ -279,7 +279,7 @@ void loop() {
           config.EIShaper_freq = *(float *)&(cmd[1]);
           write_config();
           print_config();
-          uint16_t pos[7];
+          uint16_t pos[8];
           readPose(pos);
           if (config.EIShaper_enabled) {
             EIShaperInit(pos);
@@ -291,7 +291,7 @@ void loop() {
           config.EIShaper_V = *(float *)&(cmd[1]);
           write_config();
           print_config();
-          uint16_t pos[7];
+          uint16_t pos[8];
           readPose(pos);
           if (config.EIShaper_enabled) {
             EIShaperInit(pos);
@@ -303,7 +303,7 @@ void loop() {
           config.EIShaper_ctrl_freq = *(float *)&(cmd[1]);
           write_config();
           print_config();
-          uint16_t pos[7];
+          uint16_t pos[8];
           readPose(pos);
           if (config.EIShaper_enabled) {
             EIShaperInit(pos);
@@ -355,7 +355,7 @@ void loop() {
     
     // Serial.println("No ctrl");
 
-    uint16_t pos[7];
+    uint16_t pos[8];
     ++feedback_cnt;
     readPose(pos);
 

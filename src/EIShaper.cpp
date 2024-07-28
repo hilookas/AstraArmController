@@ -65,7 +65,7 @@ void EIShaperInit(uint16_t pos[]) {
 void EIShaperApply(uint16_t pos[]) {
   ++EIShaperCur;
   EIShaperCur %= EIShaperBufLen;
-  // memcpy(EIShaperBuf[EIShaperCur], pos, sizeof pos); // 错误的，pos此时是指针，不是数组，所以sizeof结果不是14而是4
+  // memcpy(EIShaperBuf[EIShaperCur], pos, sizeof pos); // 错误的，pos此时是指针，不是数组，所以sizeof结果不是16而是4
   memcpy(EIShaperBuf[EIShaperCur], pos, 2 * 7); // 先存一下原始数据
 
   int t2 = (EIShaperCur - EIShaperT2 + EIShaperBufLen) % EIShaperBufLen;

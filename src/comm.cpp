@@ -34,14 +34,14 @@ bool serial_recv_poll(uint8_t *c) {
 
 // 不同类型的数据包大小
 int comm_payload_size[] = {
-  14, // COMM_TYPE_PING
-  14, // COMM_TYPE_PONG
-  14, // COMM_TYPE_CTRL
-  14, // COMM_TYPE_FEEDBACK
-  14, // COMM_TYPE_TORQUE
-  14, // COMM_TYPE_CONFIG_WRITE
-  14, // COMM_TYPE_CONFIG_READ
-  14, // COMM_TYPE_CONFIG_FEEDBACK
+  16, // COMM_TYPE_PING
+  16, // COMM_TYPE_PONG
+  16, // COMM_TYPE_CTRL
+  16, // COMM_TYPE_FEEDBACK
+  16, // COMM_TYPE_TORQUE
+  16, // COMM_TYPE_CONFIG_WRITE
+  16, // COMM_TYPE_CONFIG_READ
+  16, // COMM_TYPE_CONFIG_FEEDBACK
 };
 
 // 不能被忽略的数据包
