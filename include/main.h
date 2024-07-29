@@ -3,8 +3,6 @@
 
 extern int err_cnt[10];
 
-// #define AS_LEADER // lookas
-
 struct config_t {
   int version = 1;
   int EIShaper_enabled = 1;
