@@ -10,9 +10,20 @@
 
 config_t config;
 
-void write_config() {
-  Serial.println("Writing config");
+void print_config() {
+  Serial.print("config version: "); Serial.println(config.version);
+  Serial.print("1 EIShaper_enabled: "); Serial.println(config.EIShaper_enabled);
+  Serial.print("2 EIShaper_freq: "); Serial.println(config.EIShaper_freq);
+  Serial.print("3 EIShaper_V: "); Serial.println(config.EIShaper_V);
+  Serial.print("4 EIShaper_ctrl_freq: "); Serial.println(config.EIShaper_ctrl_freq);
+  Serial.print("5 servo_vel: "); Serial.println(config.servo_vel);
+  Serial.print("6 servo_acc: "); Serial.println(config.servo_acc);
+  Serial.print("7 servo_backlash: "); Serial.println(config.servo_backlash);
+  Serial.print("8 servo_vel2: "); Serial.println(config.servo_vel2);
+  Serial.print("9 servo_acc2: "); Serial.println(config.servo_acc2);
+}
 
+void write_config() {
   File file = LittleFS.open("/config.txt", FILE_WRITE);
   if (!file) {
     Serial.println("Failed to open file for writing");
@@ -26,26 +37,12 @@ void write_config() {
   }
 
   file.close();
-}
-
-void print_config() {
-  Serial.print("config version: "); Serial.println(config.version);
-  Serial.print("1 EIShaper_enabled: "); Serial.println(config.EIShaper_enabled);
-  Serial.print("2 EIShaper_freq: "); Serial.println(config.EIShaper_freq);
-  Serial.print("3 EIShaper_V: "); Serial.println(config.EIShaper_V);
-  Serial.print("4 EIShaper_ctrl_freq: "); Serial.println(config.EIShaper_ctrl_freq);
-  Serial.print("5 servo_speed: "); Serial.println(config.servo_speed);
-  Serial.print("6 servo_acc: "); Serial.println(config.servo_acc);
-  Serial.print("7 servo_backlash: "); Serial.println(config.servo_backlash);
-  Serial.print("8 servo_backlash2: "); Serial.println(config.servo_backlash2);
+  
+  Serial.println("Config written");
+  print_config();
 }
 
 void read_config() {
-  if (!LittleFS.begin(true)) {
-    Serial.println("LittleFS Mount Failed");
-    return;
-  }
-
   File file = LittleFS.open("/config.txt");
   if (!file) {
     Serial.println("Failed to open file for reading");
@@ -83,10 +80,10 @@ void read_config() {
 
   memcpy((uint8_t *)&config, (uint8_t *)&temp_config, sizeof config);
 
+  file.close();
+
   Serial.println("Config read");
   print_config();
-
-  file.close();
 }
 
 int err_cnt[10];
@@ -133,28 +130,29 @@ void setupTorque(int enable) {
 
 void doPose(uint16_t pos[]) {
   // 舵机编码器值范围 [0,4096) 对应 [0,2*PI) L形态各个关节为中值2048
-  int servo_speed = config.servo_speed; // 32766
+  int servo_vel = config.servo_vel; // 32766
   int servo_acc = config.servo_acc; // max: 256
-
   int backslash = config.servo_backlash;
+
   Serial.println(backslash);
+  
+  int servo_vel2 = config.servo_vel2; // 32766
+  int servo_acc2 = config.servo_acc2; // max: 256
 
-  pos[0] += backslash;
-  sts.WritePosEx(4, pos[0], servo_speed, servo_acc);
-  sts.WritePosEx(5, 4095 - pos[0], servo_speed, servo_acc);
-  sts.WritePosEx(6, pos[0], servo_speed, servo_acc);
-  sts.WritePosEx(7, 4095 - pos[0], servo_speed, servo_acc);
+  sts.WritePosEx(4,  pos[0]        + backslash, servo_vel, servo_acc);
+  sts.WritePosEx(5,  4095 - pos[0] + backslash, servo_vel, servo_acc);
+  sts.WritePosEx(6,  pos[0]        + backslash, servo_vel, servo_acc);
+  sts.WritePosEx(7,  4095 - pos[0] + backslash, servo_vel, servo_acc);
 
-  pos[1] += backslash;
-  sts.WritePosEx(8, pos[1], servo_speed, servo_acc);
-  sts.WritePosEx(9, 4095 - pos[1], servo_speed, servo_acc);
-  sts.WritePosEx(10, pos[1], servo_speed, servo_acc);
-  sts.WritePosEx(11, 4095 - pos[1], servo_speed, servo_acc);
+  sts.WritePosEx(8,  pos[1]        + backslash, servo_vel, servo_acc);
+  sts.WritePosEx(9,  4095 - pos[1] + backslash, servo_vel, servo_acc);
+  sts.WritePosEx(10, pos[1]        + backslash, servo_vel, servo_acc);
+  sts.WritePosEx(11, 4095 - pos[1] + backslash, servo_vel, servo_acc);
 
-  sts.WritePosEx(12, pos[2], servo_speed, servo_acc);
-  sts.WritePosEx(13, pos[3], servo_speed, servo_acc);
-  sts.WritePosEx(14, pos[4], servo_speed, servo_acc);
-  sts.WritePosEx(15, pos[5], servo_speed, servo_acc);
+  sts.WritePosEx(12, pos[2], servo_vel2, servo_acc2);
+  sts.WritePosEx(13, pos[3], servo_vel2, servo_acc2);
+  sts.WritePosEx(14, pos[4], servo_vel2, servo_acc2);
+  sts.WritePosEx(15, pos[5], servo_vel2, servo_acc2);
 }
 
 void readPose(uint16_t pos[]) {
@@ -182,6 +180,11 @@ void setup() {
 
   InitScreen();
 
+  if (!LittleFS.begin(true)) {
+    Serial.println("LittleFS Mount Failed");
+    return;
+  }
+
   read_config();
 
 #define S_RXD 18
@@ -207,6 +210,9 @@ void setup() {
   last_ping_time = 0;
   last_pong_time = 0;
 }
+
+#define FLOAT_TO_U32(x) (*(uint32_t *)&(x))
+#define U32_TO_FLOAT(x) (*(float *)&(x))
 
 void loop() {
   comm_type_t type;
@@ -241,87 +247,97 @@ void loop() {
 
       for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
       comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
-    } else if (type == COMM_TYPE_CONFIG_WRITE || type == COMM_TYPE_CONFIG_READ) {
+    } else if (type == COMM_TYPE_CONFIG_WRITE) {
       uint32_t cmd[2];
       memcpy(cmd, buf, sizeof cmd);
       for (int i = 0; i < 2; ++i) cmd[i] = ntohl(cmd[i]);
 
       if (cmd[0] == 0x01) {
-        if (type == COMM_TYPE_CONFIG_WRITE) {
-          config.EIShaper_enabled = (bool)cmd[1];
-          write_config();
-          print_config();
-          uint16_t pos[8];
-          readPose(pos);
-          if (config.EIShaper_enabled) {
-            EIShaperInit(pos);
-          }
+        config.EIShaper_enabled = (bool)cmd[1];
+        write_config();
+        uint16_t pos[8];
+        readPose(pos);
+        if (config.EIShaper_enabled) {
+          EIShaperInit(pos);
         }
         cmd[1] = (uint32_t)config.EIShaper_enabled;
       } else if (cmd[0] == 0x02) {
-        if (type == COMM_TYPE_CONFIG_WRITE) {
-          config.EIShaper_freq = *(float *)&(cmd[1]);
-          write_config();
-          print_config();
-          uint16_t pos[8];
-          readPose(pos);
-          if (config.EIShaper_enabled) {
-            EIShaperInit(pos);
-          }
+        config.EIShaper_freq = U32_TO_FLOAT(cmd[1]);
+        write_config();
+        uint16_t pos[8];
+        readPose(pos);
+        if (config.EIShaper_enabled) {
+          EIShaperInit(pos);
         }
-        cmd[1] = *(uint32_t *)&(config.EIShaper_freq);
+        cmd[1] = FLOAT_TO_U32(config.EIShaper_freq);
       } else if (cmd[0] == 0x03) {
-        if (type == COMM_TYPE_CONFIG_WRITE) {
-          config.EIShaper_V = *(float *)&(cmd[1]);
-          write_config();
-          print_config();
-          uint16_t pos[8];
-          readPose(pos);
-          if (config.EIShaper_enabled) {
-            EIShaperInit(pos);
-          }
+        config.EIShaper_V = U32_TO_FLOAT(cmd[1]);
+        write_config();
+        uint16_t pos[8];
+        readPose(pos);
+        if (config.EIShaper_enabled) {
+          EIShaperInit(pos);
         }
-        cmd[1] = *(uint32_t *)&(config.EIShaper_V);
+        cmd[1] = FLOAT_TO_U32(config.EIShaper_V);
       } else if (cmd[0] == 0x04) {
-        if (type == COMM_TYPE_CONFIG_WRITE) {
-          config.EIShaper_ctrl_freq = *(float *)&(cmd[1]);
-          write_config();
-          print_config();
-          uint16_t pos[8];
-          readPose(pos);
-          if (config.EIShaper_enabled) {
-            EIShaperInit(pos);
-          }
+        config.EIShaper_ctrl_freq = U32_TO_FLOAT(cmd[1]);
+        write_config();
+        uint16_t pos[8];
+        readPose(pos);
+        if (config.EIShaper_enabled) {
+          EIShaperInit(pos);
         }
-        cmd[1] = *(uint32_t *)&(config.EIShaper_ctrl_freq);
+        cmd[1] = FLOAT_TO_U32(config.EIShaper_ctrl_freq);;
       } else if (cmd[0] == 0x05) {
-        if (type == COMM_TYPE_CONFIG_WRITE) {
-          config.servo_speed = (cmd[1]);
-          write_config();
-          print_config();
-        }
-        cmd[1] = (config.servo_speed);
+        config.servo_vel = (cmd[1]);
+        write_config();
+        cmd[1] = (config.servo_vel);
       } else if (cmd[0] == 0x06) {
-        if (type == COMM_TYPE_CONFIG_WRITE) {
-          config.servo_acc = (cmd[1]);
-          write_config();
-          print_config();
-        }
+        config.servo_acc = (cmd[1]);
+        write_config();
         cmd[1] = (config.servo_acc);
       } else if (cmd[0] == 0x07) {
-        if (type == COMM_TYPE_CONFIG_WRITE) {
-          config.servo_backlash = (cmd[1]);
-          write_config();
-          print_config();
-        }
+        config.servo_backlash = (cmd[1]);
+        write_config();
         cmd[1] = (config.servo_backlash);
       } else if (cmd[0] == 0x08) {
-        if (type == COMM_TYPE_CONFIG_WRITE) {
-          config.servo_backlash2 = (cmd[1]);
-          write_config();
-          print_config();
-        }
-        cmd[1] = (config.servo_backlash2);
+        config.servo_vel2 = (cmd[1]);
+        write_config();
+        cmd[1] = (config.servo_vel2);
+      } else if (cmd[0] == 0x09) {
+        config.servo_acc2 = (cmd[1]);
+        write_config();
+        cmd[1] = (config.servo_acc2);
+      } else {
+        Serial.println("Unknown command");
+      }
+
+      for (int i = 0; i < 2; ++i) cmd[i] = htonl(cmd[i]);
+      memcpy(buf, cmd, sizeof cmd);
+      comm_send_blocking(COMM_TYPE_CONFIG_FEEDBACK, (uint8_t *)buf);
+    } else if (type == COMM_TYPE_CONFIG_READ) {
+      uint32_t cmd[2];
+      memcpy(cmd, buf, sizeof cmd);
+      for (int i = 0; i < 2; ++i) cmd[i] = ntohl(cmd[i]);
+
+      if (cmd[0] == 0x01) {
+        cmd[1] = (uint32_t)config.EIShaper_enabled;
+      } else if (cmd[0] == 0x02) {
+        cmd[1] = FLOAT_TO_U32(config.EIShaper_freq);
+      } else if (cmd[0] == 0x03) {
+        cmd[1] = FLOAT_TO_U32(config.EIShaper_V);
+      } else if (cmd[0] == 0x04) {
+        cmd[1] = FLOAT_TO_U32(config.EIShaper_ctrl_freq);
+      } else if (cmd[0] == 0x05) {
+        cmd[1] = (config.servo_vel);
+      } else if (cmd[0] == 0x06) {
+        cmd[1] = (config.servo_acc);
+      } else if (cmd[0] == 0x07) {
+        cmd[1] = (config.servo_backlash);
+      } else if (cmd[0] == 0x08) {
+        cmd[1] = (config.servo_vel2);
+      } else if (cmd[0] == 0x09) {
+        cmd[1] = (config.servo_acc2);
       } else {
         Serial.println("Unknown command");
       }
