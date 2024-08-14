@@ -134,7 +134,7 @@ void doPose(uint16_t pos[]) {
   int servo_acc = config.servo_acc; // max: 256
   int backslash = config.servo_backlash;
 
-  Serial.println(backslash);
+  // Serial.println(backslash);
   
   int servo_vel2 = config.servo_vel2; // 32766
   int servo_acc2 = config.servo_acc2; // max: 256
