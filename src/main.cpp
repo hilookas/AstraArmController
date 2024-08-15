@@ -125,6 +125,8 @@ void setupTorque(int enable) {
   sts.EnableTorque(13, enable);
   sts.EnableTorque(14, enable);
 
+  sts.EnableTorque(15, enable);
+
   sts.writeWord(15, SMS_STS_TORQUE_LIMIT_L, 500); // 保护舵机
 }
 
