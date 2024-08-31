@@ -29,59 +29,73 @@ void InitScreen() {
 
 SMS_STS sts;
 
-#define TIMER_TIMEOUT_US 2000
+#define TIMER_TIMEOUT_US 8000
 
 esp_timer_handle_t timer;
 
-#define BACKLASH_COMP_FEEDFORWARD 150
+#define BACKLASH_COMP_FEEDFORWARD 200
 
-int init_pos[8];
-int goal_pos[8] = { 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048,  };
+#define SERVO_NUM 8
+
+int init_pos[SERVO_NUM];
+int goal_pos[SERVO_NUM] = { 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048,  };
+// int goal_pos[SERVO_NUM] = { 2048, 2048, 2048, 2048, };
 
 void read_pos(int pos[]) {
-  for (int i = 0; i < 4; ++i) {
+  for (int i = 0; i < SERVO_NUM; ++i) {
     pos[i] = sts.ReadPos(4 + i);
   }
 }
 
 void timer_callback(void *arg) {
-  int pos[8];
+  int pos[SERVO_NUM];
   read_pos(pos);
   
-  for (int i = 0; i < 4; ++i) {
+  for (int i = 0; i < SERVO_NUM; ++i) {
     pos[i] -= init_pos[i];
     if (pos[i] < 0) pos[i] += 4096;
-    pos[i] += 2048; // 0 offset to 2048
+    // Move middle from 0 to 2048
+    pos[i] += 2048;
     if (pos[i] >= 4096) pos[i] -= 4096;
   }
+  
+  // // get real pos based on the average of two servo
+  // for (int i = 0; i < SERVO_NUM / 2; ++i) {
+  //   pos[i * 2] = (pos[i * 2] + 4096 - pos[i * 2 + 1]) / 2;
+  //   pos[i * 2 + 1] = 4096 - pos[i * 2];
+  // }
+  
+  // average load into 4 servo
+  for (int i = 0; i < SERVO_NUM / 4; ++i) {
+    pos[i * 4] = (pos[i * 4] + 4096 - pos[i * 4 + 1] + pos[i * 4 + 2] + 4096 - pos[i * 4 + 3]) / 4;
+    pos[i * 4 + 1] = 4096 - pos[i * 4];
+    pos[i * 4 + 2] = pos[i * 4];
+    pos[i * 4 + 3] = 4096 - pos[i * 4];
+  }
 
-  int err[8];
-  for (int i = 0; i < 4; ++i) {
+  int err[SERVO_NUM];
+  for (int i = 0; i < SERVO_NUM; ++i) {
     err[i] = goal_pos[i] - pos[i];
   }
 
-  int stiction_compensate[8];
-  for (int i = 0; i < 4; ++i) {
-    if (err[i] > 0) {
-      stiction_compensate[i] = 60;
-    } else if (err[i] < 0) {
-      stiction_compensate[i] = -60;
-    } else {
-      stiction_compensate[i] = 0;
-    }
-  }
+  int stiction_compensate = 0;
 
-  int kp = 40; // 80 for accurate positioning
-  for (int i = 0; i < 4; ++i) {
-    int ready_send = -(BACKLASH_COMP_FEEDFORWARD + kp * err[i] + stiction_compensate[i]);
+  int kp = 80; // 80 for accurate positioning
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    int ready_send = -(BACKLASH_COMP_FEEDFORWARD + kp * err[i] + stiction_compensate * (err[i] > 0 ? 1 : -1));
     if (ready_send > 800) ready_send = 800;
     if (ready_send < -800) ready_send = -800;
     if (ready_send < 0) ready_send = -(ready_send) + 1024;
     sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, ready_send);
   }
 
-  for (int i = 0; i < 4; ++i) {
-    Serial.print(BACKLASH_COMP_FEEDFORWARD + kp * err[i] + stiction_compensate[i]);
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    Serial.print(err[i]);
+    Serial.print(" ");
+  }
+
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    Serial.print(BACKLASH_COMP_FEEDFORWARD + kp * err[i] + stiction_compensate * (err[i] > 0 ? 1 : -1));
     Serial.print(" ");
   }
   Serial.println();
@@ -100,36 +114,41 @@ void setup() {
   
   read_pos(init_pos);
 
-  for (int i = 0; i < 4; ++i) {
-    if (!(200 < init_pos[i] && init_pos[i] < 4096 - 200)) {
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    if (!(50 < init_pos[i] && init_pos[i] < 4096 - 50)) {
       Serial.print("Maybe cause wrong init_pos, check power status, or reinstall the servo #"); Serial.print(i); Serial.println();
       while (1) ;
     }
   }
   
   // preload
-  for (int i = 0; i < 4; ++i) {
-    sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, BACKLASH_COMP_FEEDFORWARD/2);
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, BACKLASH_COMP_FEEDFORWARD);
   }
 
   // wait for stable
-  sleep(1);
+  sleep(2);
   
-  int init_pos1[8];
+  int init_pos1[SERVO_NUM];
   read_pos(init_pos1);
 
   // inversed preload
-  for (int i = 0; i < 4; ++i) {
-    sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, BACKLASH_COMP_FEEDFORWARD/2 + 1024); // negative as scs goal time format
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, BACKLASH_COMP_FEEDFORWARD + 1024); // negative as scs goal time format
   }
 
   // wait for stable
-  sleep(1);
+  sleep(2);
   
-  int init_pos2[8];
+  int init_pos2[SERVO_NUM];
   read_pos(init_pos2);
 
-  for (int i = 0; i < 4; ++i) {
+  // inversed preload
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, 0); // negative as scs goal time format
+  }
+
+  for (int i = 0; i < SERVO_NUM; ++i) {
     if (std::abs(init_pos1[i] - init_pos2[i]) > 200) {
       Serial.print("Gap is too wide, check power status, or reinstall the servo #"); Serial.print(i); Serial.println();
       while (1) ;
@@ -160,6 +179,12 @@ void loop() {
 
       goal_pos[0] = pos[0];
       goal_pos[1] = 4096 - pos[0];
+      goal_pos[2] = pos[0];
+      goal_pos[3] = 4096 - pos[0];
+      goal_pos[4] = pos[1];
+      goal_pos[5] = 4096 - pos[1];
+      goal_pos[6] = pos[1];
+      goal_pos[7] = 4096 - pos[1];
     }
   }
 
