@@ -6,6 +6,7 @@
 #include "main.h"
 #include <FS.h>
 #include <LittleFS.h>
+#include <trapTraj.hpp>
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels, 32 as default.
@@ -29,21 +30,21 @@ void InitScreen() {
 
 SMS_STS sts;
 
-#define TIMER_TIMEOUT_US 8000
+#define TIMER_TIMEOUT_US 10000
 // 舵机内部速度变量的更新频率好像是50Hz
 
 esp_timer_handle_t timer;
 
-// #define BACKLASH_COMP_FEEDFORWARD 200 # Max: 1000 as servo document
-#define BACKLASH_COMP_FEEDFORWARD 0
+#define BACKLASH_COMP_FEEDFORWARD 200
 
-#define SERVO_NUM 1
+#define SERVO_NUM 4
 #define JOINT_NUM 1
 
 int init_pos[SERVO_NUM];
 
-int goal_pos[JOINT_NUM] = { 2048 };
+TrapezoidalTrajectory traj[JOINT_NUM];
 float last_pos[JOINT_NUM] = { 2048 };
+float last_vel[JOINT_NUM] = { 0 };
 
 #define ACC 100
 #define MAX_VEL 10000
@@ -72,70 +73,78 @@ void timer_callback(void *arg) {
   // average load into 4 servo
   float pos[JOINT_NUM];
   for (int i = 0; i < JOINT_NUM; ++i) {
-    pos[i] = raw_pos[i * 4];
-    // pos[i] = (raw_pos[i * 4] + (4096 - raw_pos[i * 4 + 1]) + raw_pos[i * 4 + 2] + (4096 - raw_pos[i * 4 + 3])) / 4.0;
+    pos[i] = (raw_pos[i * 4] + (4096 - raw_pos[i * 4 + 1]) + raw_pos[i * 4 + 2] + (4096 - raw_pos[i * 4 + 3])) / 4.0;
   }
   
   float vel[JOINT_NUM];
   for (int i = 0; i < JOINT_NUM; ++i) {
     vel[i] = (pos[i] - last_pos[i]) / TIMER_TIMEOUT_US * 1000000;
+    float filter = 0.01;
+    vel[i] = vel[i] * filter + last_vel[i] * (1 - filter);
     last_pos[i] = pos[i];
+    last_vel[i] = vel[i];
   }
 
-  float goal_vel[JOINT_NUM];
+  float goal_pos[JOINT_NUM];
   for (int i = 0; i < JOINT_NUM; ++i) {
-    float distance_to_stop = (vel[i] * vel[i]) / (2 * ACC) * (vel[i] >= 0 ? 1 : -1);
-    float distance_to_go = goal_pos[i] - pos[i];
-
-    if (distance_to_stop <= distance_to_go) { // accelerate
-      goal_vel[i] = vel[i] + ACC * TIMER_TIMEOUT_US / 1000000.0;
-      Serial.print("+A ");
-    } else { // deaccelerate
-      goal_vel[i] = vel[i] - ACC * TIMER_TIMEOUT_US / 1000000.0;
-      Serial.print("+D ");
-    }
-    Serial.print(distance_to_stop);
-    Serial.print(" ");
-    Serial.print(distance_to_go);
-    Serial.print(" ");
-    Serial.print(vel[i]);
-    Serial.print(" ");
-    Serial.print(goal_vel[i]);
-    Serial.print(" ");
+    goal_pos[i] = traj[i].update();
   }
 
-  float err[SERVO_NUM];
+  float kp = 20, kd = 0, ki = 0.4;
+
+  static float last_err[JOINT_NUM];
+  static float i_out[JOINT_NUM] = {};
+  float out[JOINT_NUM] = {};
   for (int i = 0; i < JOINT_NUM; ++i) {
-    err[i * 4] = goal_vel[i] - vel[i];
-    // err[i * 4] = goal_vel[i] - vel[i];
-    // err[i * 4 + 1] = -err[i * 4 + 1];
-    // err[i * 4 + 2] = err[i * 4];
-    // err[i * 4 + 3] = -err[i * 4 + 1];
+    float err = goal_pos[i] - pos[i];
+
+    float p_out = kp * err;
+    i_out[i] += ki * err;
+    float d_out = kd * (err - last_err[i]);
+
+    out[i] = p_out + i_out[i] + d_out;
+
+    last_err[i] = err;
   }
 
-  int stiction_compensate = 0;
-  int k = 100;
-
-  int torque[SERVO_NUM];
-  for (int i = 0; i < SERVO_NUM; ++i) {
-    torque[i] = BACKLASH_COMP_FEEDFORWARD + k * err[i] + 0.1 * goal_vel[i] + stiction_compensate * (err[i] > 0 ? 1 : -1);
+  float raw_out[SERVO_NUM];
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    raw_out[i * 4] = out[i];
+    raw_out[i * 4 + 1] = -out[i];
+    raw_out[i * 4 + 2] = out[i];
+    raw_out[i * 4 + 3] = -out[i];
   }
 
   for (int i = 0; i < SERVO_NUM; ++i) {
-    int ready_send = -torque[i];
+    int ready_send = -(BACKLASH_COMP_FEEDFORWARD + raw_out[i]); // Max: 1000 as servo document
     if (ready_send > 800) ready_send = 800;
     if (ready_send < -800) ready_send = -800;
     if (ready_send < 0) ready_send = -(ready_send) + 1024;
     sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, ready_send);
   }
 
-  for (int i = 0; i < SERVO_NUM; ++i) {
-    Serial.print(err[i]);
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(vel[i]);
+    Serial.print(" ");
+  }
+
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(goal_pos[i]);
+    Serial.print(" ");
+  }
+
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(pos[i]);
+    Serial.print(" ");
+  }
+
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(out[i]);
     Serial.print(" ");
   }
 
   for (int i = 0; i < SERVO_NUM; ++i) {
-    Serial.print(torque[i]);
+    Serial.print(raw_out[i]);
     Serial.print(" ");
   }
   Serial.println();
@@ -161,36 +170,36 @@ void setup() {
     }
   }
   
-  // // preload
-  // for (int i = 0; i < SERVO_NUM; ++i) {
-  //   sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, BACKLASH_COMP_FEEDFORWARD);
-  // }
+  // preload
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, BACKLASH_COMP_FEEDFORWARD);
+  }
 
-  // // wait for stable
-  // sleep(1);
+  // wait for stable
+  sleep(1);
   
-  // int init_pos1[SERVO_NUM];
-  // read_pos(init_pos1);
+  int init_pos1[SERVO_NUM];
+  read_pos(init_pos1);
 
-  // // inversed preload
-  // for (int i = 0; i < SERVO_NUM; ++i) {
-  //   sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, BACKLASH_COMP_FEEDFORWARD + 1024); // negative as scs goal time format
-  // }
+  // inversed preload
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, BACKLASH_COMP_FEEDFORWARD + 1024); // negative as scs goal time format
+  }
 
-  // // wait for stable
-  // sleep(1);
+  // wait for stable
+  sleep(1);
   
-  // int init_pos2[SERVO_NUM];
-  // read_pos(init_pos2);
+  int init_pos2[SERVO_NUM];
+  read_pos(init_pos2);
 
-  // for (int i = 0; i < SERVO_NUM; ++i) {
-  //   if (std::abs(init_pos1[i] - init_pos2[i]) > 200) {
-  //     Serial.print("Gap is too wide, check power status, or reinstall the servo #"); Serial.print(i); Serial.println();
-  //     while (1) ;
-  //   }
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    if (std::abs(init_pos1[i] - init_pos2[i]) > 200) {
+      Serial.print("Gap is too wide, check power status, or reinstall the servo #"); Serial.print(i); Serial.println();
+      while (1) ;
+    }
 
-  //   init_pos[i] = (init_pos1[i] + init_pos2[i]) / 2;
-  // }
+    init_pos[i] = (init_pos1[i] + init_pos2[i]) / 2;
+  }
 
   // https://github.com/espressif/esp-idf/blob/v5.2.2/examples/system/esp_timer/main/esp_timer_example_main.c
   const esp_timer_create_args_t timer_args = {
@@ -212,14 +221,12 @@ void loop() {
       memcpy(pos, buf, sizeof pos);
       for (int i = 0; i < 6; ++i) pos[i] = ntohs(pos[i]);
 
-      goal_pos[0] = pos[0];
-      // goal_pos[1] = 4096 - pos[0];
-      // goal_pos[2] = pos[0];
-      // goal_pos[3] = 4096 - pos[0];
-      // goal_pos[4] = pos[1];
-      // goal_pos[5] = 4096 - pos[1];
-      // goal_pos[6] = pos[1];
-      // goal_pos[7] = 4096 - pos[1];
+      if (traj[0].trajectory_done_) {
+        traj[0].planTrapezoidal(pos[0], last_pos[0], last_vel[0]);
+      } else {
+        TrapezoidalTrajectory::Step_t traj_step = traj[0].eval(traj[0].t_);
+        traj[0].planTrapezoidal(pos[0], traj_step.Y, traj_step.Yd);
+      }
     }
   }
 
