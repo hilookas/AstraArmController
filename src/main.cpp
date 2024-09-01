@@ -29,17 +29,20 @@ void InitScreen() {
 
 SMS_STS sts;
 
-#define TIMER_TIMEOUT_US 8000
+#define TIMER_TIMEOUT_US 10000
+// 舵机内部速度变量的更新频率好像是50Hz
 
 esp_timer_handle_t timer;
 
-#define BACKLASH_COMP_FEEDFORWARD 200
+// #define BACKLASH_COMP_FEEDFORWARD 200 # Max: 1000 as servo document
+#define BACKLASH_COMP_FEEDFORWARD 100
 
-#define SERVO_NUM 8
+#define SERVO_NUM 4
+#define JOINT_NUM 1
 
 int init_pos[SERVO_NUM];
-int goal_pos[SERVO_NUM] = { 2048, 2048, 2048, 2048, 2048, 2048, 2048, 2048,  };
-// int goal_pos[SERVO_NUM] = { 2048, 2048, 2048, 2048, };
+
+int goal_pos[JOINT_NUM] = { 2048 };
 
 void read_pos(int pos[]) {
   for (int i = 0; i < SERVO_NUM; ++i) {
@@ -48,56 +51,87 @@ void read_pos(int pos[]) {
 }
 
 void timer_callback(void *arg) {
-  int pos[SERVO_NUM];
-  read_pos(pos);
-  
+  int raw_pos[SERVO_NUM];
   for (int i = 0; i < SERVO_NUM; ++i) {
-    pos[i] -= init_pos[i];
-    if (pos[i] < 0) pos[i] += 4096;
-    // Move middle from 0 to 2048
-    pos[i] += 2048;
-    if (pos[i] >= 4096) pos[i] -= 4096;
+    raw_pos[i] = sts.ReadPos(4 + i);
   }
   
-  // // get real pos based on the average of two servo
-  // for (int i = 0; i < SERVO_NUM / 2; ++i) {
-  //   pos[i * 2] = (pos[i * 2] + 4096 - pos[i * 2 + 1]) / 2;
-  //   pos[i * 2 + 1] = 4096 - pos[i * 2];
-  // }
+  // Zero offest
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    raw_pos[i] -= init_pos[i];
+    if (raw_pos[i] < 0) raw_pos[i] += 4096;
+    // Move middle from 0 to 2048
+    raw_pos[i] += 2048;
+    if (raw_pos[i] >= 4096) raw_pos[i] -= 4096;
+  }
   
   // average load into 4 servo
-  for (int i = 0; i < SERVO_NUM / 4; ++i) {
-    pos[i * 4] = (pos[i * 4] + 4096 - pos[i * 4 + 1] + pos[i * 4 + 2] + 4096 - pos[i * 4 + 3]) / 4;
-    pos[i * 4 + 1] = 4096 - pos[i * 4];
-    pos[i * 4 + 2] = pos[i * 4];
-    pos[i * 4 + 3] = 4096 - pos[i * 4];
+  float pos[JOINT_NUM];
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    pos[i] = (raw_pos[i * 4] + (4096 - raw_pos[i * 4 + 1]) + raw_pos[i * 4 + 2] + (4096 - raw_pos[i * 4 + 3])) / 4.0;
   }
 
-  int err[SERVO_NUM];
-  for (int i = 0; i < SERVO_NUM; ++i) {
-    err[i] = goal_pos[i] - pos[i];
+  float kp = 5, kd = 0.1, ki = 0.2;
+
+  static float last_err[JOINT_NUM];
+  static float i_out[JOINT_NUM] = {};
+  float out[JOINT_NUM] = {};
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    float err = goal_pos[i] - pos[i];
+
+    float p_out = kp * err;
+    i_out[i] += ki * err;
+    float d_out = kd * (err - last_err[i]);
+
+    if (p_out > 300) p_out = 300;
+    if (p_out < -300) p_out = -300;
+
+    out[i] = p_out + i_out[i] + d_out;
+
+    last_err[i] = err;
+    
+    Serial.print("data:");
+    Serial.print(goal_pos[i]);
+    Serial.print(",");
+    Serial.print(pos[i]);
+    Serial.print(",");
+    Serial.print(err);
+    Serial.print(",");
+    Serial.print(p_out);
+    Serial.print(",");
+    Serial.print(i_out[i]);
+    Serial.print(",");
+    Serial.print(d_out);
+    Serial.print(",");
+    Serial.print(out[i]);
+    Serial.print(",");
+    Serial.print(last_err[i]);
+    Serial.print(",");
   }
 
-  int stiction_compensate = 0;
+  float raw_out[SERVO_NUM];
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    raw_out[i * 4] = out[i];
+    raw_out[i * 4 + 1] = -out[i];
+    raw_out[i * 4 + 2] = out[i];
+    raw_out[i * 4 + 3] = -out[i];
+  }
 
-  int kp = 80; // 80 for accurate positioning
+  int torque[SERVO_NUM];
   for (int i = 0; i < SERVO_NUM; ++i) {
-    int ready_send = -(BACKLASH_COMP_FEEDFORWARD + kp * err[i] + stiction_compensate * (err[i] > 0 ? 1 : -1));
+    torque[i] = BACKLASH_COMP_FEEDFORWARD + raw_out[i];
+    Serial.print(torque[i]);
+    Serial.print(",");
+  }
+
+  for (int i = 0; i < SERVO_NUM; ++i) {
+    int ready_send = -torque[i];
     if (ready_send > 800) ready_send = 800;
     if (ready_send < -800) ready_send = -800;
     if (ready_send < 0) ready_send = -(ready_send) + 1024;
     sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, ready_send);
   }
 
-  for (int i = 0; i < SERVO_NUM; ++i) {
-    Serial.print(err[i]);
-    Serial.print(" ");
-  }
-
-  for (int i = 0; i < SERVO_NUM; ++i) {
-    Serial.print(BACKLASH_COMP_FEEDFORWARD + kp * err[i] + stiction_compensate * (err[i] > 0 ? 1 : -1));
-    Serial.print(" ");
-  }
   Serial.println();
 }
 
@@ -127,7 +161,7 @@ void setup() {
   }
 
   // wait for stable
-  sleep(2);
+  sleep(1);
   
   int init_pos1[SERVO_NUM];
   read_pos(init_pos1);
@@ -138,15 +172,10 @@ void setup() {
   }
 
   // wait for stable
-  sleep(2);
+  sleep(1);
   
   int init_pos2[SERVO_NUM];
   read_pos(init_pos2);
-
-  // inversed preload
-  for (int i = 0; i < SERVO_NUM; ++i) {
-    sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, 0); // negative as scs goal time format
-  }
 
   for (int i = 0; i < SERVO_NUM; ++i) {
     if (std::abs(init_pos1[i] - init_pos2[i]) > 200) {
@@ -178,13 +207,7 @@ void loop() {
       for (int i = 0; i < 6; ++i) pos[i] = ntohs(pos[i]);
 
       goal_pos[0] = pos[0];
-      goal_pos[1] = 4096 - pos[0];
-      goal_pos[2] = pos[0];
-      goal_pos[3] = 4096 - pos[0];
-      goal_pos[4] = pos[1];
-      goal_pos[5] = 4096 - pos[1];
-      goal_pos[6] = pos[1];
-      goal_pos[7] = 4096 - pos[1];
+      goal_pos[1] = pos[1];
     }
   }
 
