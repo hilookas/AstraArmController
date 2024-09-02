@@ -90,8 +90,7 @@ bool comm_recv_poll(comm_type_t *type, uint8_t payload[]) {
 
     // 无效数据
     if (recv_buf_p == 0 && buf != 0x5A) {
-      err_cnt[0] += 1;
-      // fprintf(stderr, "comm: warning: Received wrong byte!");
+      Serial.println("comm: warning: Received wrong byte!");
       continue;
     }
     recv_buf[recv_buf_p++] = buf;
@@ -102,8 +101,7 @@ bool comm_recv_poll(comm_type_t *type, uint8_t payload[]) {
     // 收到未知类型的数据包
     // assert(recv_buf_p != 2 || recv_buf[1] < (sizeof comm_payload_size) / (sizeof comm_payload_size[0]));
     if (recv_buf_p == 2 && recv_buf[1] >= (sizeof comm_payload_size) / (sizeof comm_payload_size[0])) {
-      err_cnt[1] += 1;
-      // fprintf(stderr, "comm: warning: Received wrong type!");
+      Serial.println("comm: warning: Received wrong type!");
       recv_buf_p = 0; // 重置状态
       continue;
     }

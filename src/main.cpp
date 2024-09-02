@@ -5,88 +5,8 @@
 #include "EIShaper.h"
 #include "comm.h"
 #include "main.h"
-#include <FS.h>
-#include <LittleFS.h>
-
-config_t config;
-
-void print_config() {
-  Serial.print("config version: "); Serial.println(config.version);
-  Serial.print("1 EIShaper_enabled: "); Serial.println(config.EIShaper_enabled);
-  Serial.print("2 EIShaper_freq: "); Serial.println(config.EIShaper_freq);
-  Serial.print("3 EIShaper_V: "); Serial.println(config.EIShaper_V);
-  Serial.print("4 EIShaper_ctrl_freq: "); Serial.println(config.EIShaper_ctrl_freq);
-  Serial.print("5 servo_vel: "); Serial.println(config.servo_vel);
-  Serial.print("6 servo_acc: "); Serial.println(config.servo_acc);
-  Serial.print("7 servo_backlash: "); Serial.println(config.servo_backlash);
-  Serial.print("8 servo_vel2: "); Serial.println(config.servo_vel2);
-  Serial.print("9 servo_acc2: "); Serial.println(config.servo_acc2);
-}
-
-void write_config() {
-  File file = LittleFS.open("/config.txt", FILE_WRITE);
-  if (!file) {
-    Serial.println("Failed to open file for writing");
-    return;
-  }
-
-  if (file.write((uint8_t *)&config, sizeof config) == 0) {
-    Serial.println("Write failed");
-    file.close();
-    return;
-  }
-
-  file.close();
-  
-  Serial.println("Config written");
-  print_config();
-}
-
-void read_config() {
-  File file = LittleFS.open("/config.txt");
-  if (!file) {
-    Serial.println("Failed to open file for reading");
-
-    Serial.println("Initing config");
-    write_config();
-    return;
-  }
-
-  if (file.isDirectory()) {
-    Serial.println("Is dir?");
-    file.close();
-    return;
-  }
-
-  config_t temp_config;
-  size_t read_size = file.read((uint8_t *)&temp_config, sizeof temp_config);
-  if (read_size != (sizeof temp_config)) {
-    Serial.println("Wrong size.");
-    file.close();
-
-    Serial.println("Initing config");
-    write_config();
-    return;
-  }
-
-  if (temp_config.version != config.version) {
-    Serial.println("Wrong version");
-    file.close();
-
-    Serial.println("Initing config");
-    write_config();
-    return;
-  }
-
-  memcpy((uint8_t *)&config, (uint8_t *)&temp_config, sizeof config);
-
-  file.close();
-
-  Serial.println("Config read");
-  print_config();
-}
-
-int err_cnt[10];
+#include "dualMotor.h"
+#include "config.h"
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels, 32 as default.
@@ -108,64 +28,6 @@ void InitScreen() {
   display.display();
 }
 
-SMS_STS sts;
-
-void setupTorque(int enable) {
-  sts.EnableTorque(4, enable);
-  sts.EnableTorque(5, enable);
-  sts.EnableTorque(6, enable);
-  sts.EnableTorque(7, enable);
-
-  sts.EnableTorque(8, enable);
-  sts.EnableTorque(9, enable);
-  sts.EnableTorque(10, enable);
-  sts.EnableTorque(11, enable);
-
-  sts.EnableTorque(12, enable);
-  sts.EnableTorque(13, enable);
-  sts.EnableTorque(14, enable);
-
-  sts.EnableTorque(15, enable);
-
-  sts.writeWord(15, SMS_STS_TORQUE_LIMIT_L, 500); // 保护舵机
-}
-
-void doPose(uint16_t pos[]) {
-  // 舵机编码器值范围 [0,4096) 对应 [0,2*PI) L形态各个关节为中值2048
-  int servo_vel = config.servo_vel; // 32766
-  int servo_acc = config.servo_acc; // max: 256
-  int backslash = config.servo_backlash;
-
-  // Serial.println(backslash);
-  
-  int servo_vel2 = config.servo_vel2; // 32766
-  int servo_acc2 = config.servo_acc2; // max: 256
-
-  sts.WritePosEx(4,  pos[0]        + backslash, servo_vel, servo_acc);
-  sts.WritePosEx(5,  4095 - pos[0] + backslash, servo_vel, servo_acc);
-  sts.WritePosEx(6,  pos[0]        + backslash, servo_vel, servo_acc);
-  sts.WritePosEx(7,  4095 - pos[0] + backslash, servo_vel, servo_acc);
-
-  sts.WritePosEx(8,  pos[1]        + backslash, servo_vel, servo_acc);
-  sts.WritePosEx(9,  4095 - pos[1] + backslash, servo_vel, servo_acc);
-  sts.WritePosEx(10, pos[1]        + backslash, servo_vel, servo_acc);
-  sts.WritePosEx(11, 4095 - pos[1] + backslash, servo_vel, servo_acc);
-
-  sts.WritePosEx(12, pos[2], servo_vel2, servo_acc2);
-  sts.WritePosEx(13, pos[3], servo_vel2, servo_acc2);
-  sts.WritePosEx(14, pos[4], servo_vel2, servo_acc2);
-  sts.WritePosEx(15, pos[5], servo_vel2, servo_acc2);
-}
-
-void readPose(uint16_t pos[]) {
-  pos[0] = sts.ReadPos(4);
-  pos[1] = sts.ReadPos(8);
-  pos[2] = sts.ReadPos(12);
-  pos[3] = sts.ReadPos(13);
-  pos[4] = sts.ReadPos(14);
-  pos[5] = sts.ReadPos(15);
-}
-
 int ctrl_cnt;
 int feedback_cnt;
 uint32_t last_stat_time;
@@ -176,29 +38,18 @@ uint32_t last_ping_time;
 uint32_t last_pong_time;
 
 void setup() {
-  memset(err_cnt, 0, sizeof err_cnt);
-
   comm_init();
 
   InitScreen();
 
-  if (!LittleFS.begin(true)) {
-    Serial.println("LittleFS Mount Failed");
-    return;
-  }
-
-  read_config();
-
-#define S_RXD 18
-#define S_TXD 19
-  Serial1.begin(1000000, SERIAL_8N1, S_RXD, S_TXD);
-  while (!Serial1) delay(1);
-  sts.pSerial = &Serial1;
+  configInit();
+  
+  dualMotorSetup();
 
   setupTorque(0);
 
   uint16_t pos[8];
-  readPose(pos);
+  dualMotorReadPos(pos);
   if (config.EIShaper_enabled) {
     EIShaperInit(pos);
   }
@@ -242,10 +93,10 @@ void loop() {
       }
 
       ++ctrl_cnt;
-      doPose(pos);
+      dualMotorUpdatePos(pos);
 
       ++feedback_cnt;
-      readPose(pos);
+      dualMotorReadPos(pos);
 
       for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
       comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
@@ -258,7 +109,7 @@ void loop() {
         config.EIShaper_enabled = (bool)cmd[1];
         write_config();
         uint16_t pos[8];
-        readPose(pos);
+        dualMotorReadPos(pos);
         if (config.EIShaper_enabled) {
           EIShaperInit(pos);
         }
@@ -267,7 +118,7 @@ void loop() {
         config.EIShaper_freq = U32_TO_FLOAT(cmd[1]);
         write_config();
         uint16_t pos[8];
-        readPose(pos);
+        dualMotorReadPos(pos);
         if (config.EIShaper_enabled) {
           EIShaperInit(pos);
         }
@@ -276,7 +127,7 @@ void loop() {
         config.EIShaper_V = U32_TO_FLOAT(cmd[1]);
         write_config();
         uint16_t pos[8];
-        readPose(pos);
+        dualMotorReadPos(pos);
         if (config.EIShaper_enabled) {
           EIShaperInit(pos);
         }
@@ -285,31 +136,31 @@ void loop() {
         config.EIShaper_ctrl_freq = U32_TO_FLOAT(cmd[1]);
         write_config();
         uint16_t pos[8];
-        readPose(pos);
+        dualMotorReadPos(pos);
         if (config.EIShaper_enabled) {
           EIShaperInit(pos);
         }
         cmd[1] = FLOAT_TO_U32(config.EIShaper_ctrl_freq);;
       } else if (cmd[0] == 0x05) {
-        config.servo_vel = (cmd[1]);
+        config.joint_vel_max = (cmd[1]);
         write_config();
-        cmd[1] = (config.servo_vel);
+        cmd[1] = (config.joint_vel_max);
       } else if (cmd[0] == 0x06) {
-        config.servo_acc = (cmd[1]);
+        config.joint_acc = (cmd[1]);
         write_config();
-        cmd[1] = (config.servo_acc);
+        cmd[1] = (config.joint_acc);
       } else if (cmd[0] == 0x07) {
-        config.servo_backlash = (cmd[1]);
+        config.joint_backlash_compensate_feedforward = (cmd[1]);
         write_config();
-        cmd[1] = (config.servo_backlash);
+        cmd[1] = (config.joint_backlash_compensate_feedforward);
       } else if (cmd[0] == 0x08) {
-        config.servo_vel2 = (cmd[1]);
+        config.non_joint_vel_max = (cmd[1]);
         write_config();
-        cmd[1] = (config.servo_vel2);
+        cmd[1] = (config.non_joint_vel_max);
       } else if (cmd[0] == 0x09) {
-        config.servo_acc2 = (cmd[1]);
+        config.non_joint_acc = (cmd[1]);
         write_config();
-        cmd[1] = (config.servo_acc2);
+        cmd[1] = (config.non_joint_acc);
       } else {
         Serial.println("Unknown command");
       }
@@ -331,15 +182,15 @@ void loop() {
       } else if (cmd[0] == 0x04) {
         cmd[1] = FLOAT_TO_U32(config.EIShaper_ctrl_freq);
       } else if (cmd[0] == 0x05) {
-        cmd[1] = (config.servo_vel);
+        cmd[1] = (config.joint_vel_max);
       } else if (cmd[0] == 0x06) {
-        cmd[1] = (config.servo_acc);
+        cmd[1] = (config.joint_acc);
       } else if (cmd[0] == 0x07) {
-        cmd[1] = (config.servo_backlash);
+        cmd[1] = (config.joint_backlash_compensate_feedforward);
       } else if (cmd[0] == 0x08) {
-        cmd[1] = (config.servo_vel2);
+        cmd[1] = (config.non_joint_vel_max);
       } else if (cmd[0] == 0x09) {
-        cmd[1] = (config.servo_acc2);
+        cmd[1] = (config.non_joint_acc);
       } else {
         Serial.println("Unknown command");
       }
@@ -348,25 +199,26 @@ void loop() {
       memcpy(buf, cmd, sizeof cmd);
       comm_send_blocking(COMM_TYPE_CONFIG_FEEDBACK, (uint8_t *)buf);
     } else {
-      ++err_cnt[2];
+      Serial.println("Unknown comm type");
     }
   }
-  uint32_t this_action_time = millis();
-  if (this_action_time - last_action_time > 10) { // 每隔 10ms执行一次
-    last_action_time = this_action_time;
 
-    // Serial.println("No ctrl");
+  // uint32_t this_action_time = millis();
+  // if (this_action_time - last_action_time > 10) { // 每隔 10ms执行一次
+  //   last_action_time = this_action_time;
 
-    uint16_t pos[8];
-    ++feedback_cnt;
-    readPose(pos);
+  //   // Serial.println("No ctrl");
 
-    for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
-    comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
+  //   uint16_t pos[8];
+  //   ++feedback_cnt;
+  //   dualMotorReadPos(pos);
 
-    // follower 已经10ms没有收到信号了
-    ++err_cnt[2];
-  }
+  //   for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
+  //   comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
+
+  //   // follower 已经10ms没有收到信号了
+  //   ;
+  // }
 
   uint32_t this_stat_time = millis();
   if (this_stat_time - last_stat_time > 1000) {
@@ -381,35 +233,7 @@ void loop() {
     ctrl_cnt = 0;
     feedback_cnt = 0;
     // Row1
-    display.print(millis() / 1000); display.print(F("s ")); display.print(ctrl_freq); display.print(F("Hz ")); display.print(err_cnt[0]); display.print(F(" ")); display.print(err_cnt[1]); display.print(F(" ")); display.print(err_cnt[2]); display.println();
-
-    int servos[] = { 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
-    //               0  1  2  3  4  5   6   7   8   9  10  11
-    const int servos_cnt = 12;
-    float voltage_all = 0;
-    float current_all = 0;
-    float currents[servos_cnt];
-    for (int i = 0; i < servos_cnt; ++i) {
-      assert(sts.FeedBack(servos[i]) != -1);
-      float pos = (float)sts.ReadPos(-1) / 4096 * 2 * M_PI;
-      float vel = sts.ReadSpeed(-1) / 4096 * 2 * M_PI;
-      float load = sts.ReadLoad(-1) * 0.1;
-      float current = sts.ReadCurrent(-1) * 6.5;
-      current_all += current;
-      currents[i] = current;
-      float voltage = sts.ReadVoltage(-1) * 0.1;
-      voltage_all = voltage;
-      float temp = sts.ReadTemper(-1);
-      // Serial.printf("STS %d: pos %frad, vel %frad/s, load %f%, current %fmA, voltage %fV, temp %f\n", servos[i], pos, vel, load, current, voltage, temp);
-    }
-    // Serial.printf("voltage: %f, current_all: %f\n", voltage_all, current_all);
-
-    // Row2
-    display.print(voltage_all); display.print(F("V ")); display.print(current_all); display.print(F("mA")); display.println();
-    // Row3,4
-    display.print((int)currents[0]); display.print(F("+")); display.print((int)currents[1]); display.print(F("+")); display.print((int)currents[2]); display.print(F("+")); display.print((int)currents[3]); display.print(F(" "));
-    display.print((int)currents[4]); display.print(F("+")); display.print((int)currents[5]); display.print(F("+")); display.print((int)currents[6]); display.print(F("+")); display.print((int)currents[7]); display.println();
-    display.print((int)currents[8]); display.print(F(" ")); display.print((int)currents[9]); display.print(F(" ")); display.print((int)currents[10]); display.print(F(" ")); display.print((int)currents[11]); display.println();
+    display.print(millis() / 1000); display.print(F("s ")); display.print(ctrl_freq); display.print(F("Hz ")); display.println();
 
     display.display();
 

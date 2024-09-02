@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <main.h>
+#include "config.h"
 
 const int EIShaperBufLen = 128;
 uint16_t EIShaperBuf[EIShaperBufLen][7];
