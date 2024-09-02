@@ -72,23 +72,28 @@ int setupTorque_enable = 0;
 bool updateSetupTorque = false;
 
 void doSetupTorque(int enable) {
+  if (enable == 0) {
+    torque_enabled = false;
+  } else if (enable == 1) {
+    torque_enabled = true;
+  }
+  
   for (int i = 0; i < NONE_JOINT_NUM; ++i) {
     sts.EnableTorque(4 + 4 * JOINT_NUM + i, enable);
   }
 
   if (enable == 0) {
-    torque_enabled = false;
-
     for (int i = 0; i < 4 * JOINT_NUM; ++i) {
       sts.EnableTorque(4 + i, enable);
     }
   } else if (enable == 1) {
-    torque_enabled = true;
-
     for (int i = 0; i < 4 * JOINT_NUM; ++i) {
       sts.EnableTorque(4 + i, enable);
     }
-
+    
+    for (int i = 0; i < JOINT_NUM + NONE_JOINT_NUM; ++i) {
+      last_vel[i] = 0;
+    }
     read_pos();
 
     // set current pos as target
@@ -96,14 +101,14 @@ void doSetupTorque(int enable) {
     for (int i = 0; i < JOINT_NUM + NONE_JOINT_NUM; ++i) {
       pos[i] = last_pos[i];
     }
+    for (int i = 0; i < JOINT_NUM; ++i) {
+      traj[i].trajectory_done_ = true;
+    }
     dualMotorUpdatePos(pos);
   } else if (enable == 128) {
     int init_pos0[4 * JOINT_NUM];
     for (int i = 0; i < 4 * JOINT_NUM; ++i) {
       init_pos0[i] = sts.ReadPos(4 + i);
-    }
-
-    for (int i = 0; i < 4 * JOINT_NUM; ++i) {
       if (!(50 < init_pos0[i] && init_pos0[i] < 4096 - 50)) {
         Serial.print("Maybe cause wrong init_pos0, check power status, or reinstall the servo #"); Serial.print(i); Serial.println();
         while (1) ;
@@ -184,12 +189,21 @@ void timer_callback(void *arg) {
   for (int i = 0; i < JOINT_NUM; ++i) {
     float err = goal_pos[i] - last_pos[i];
 
-    if (last_vel[i] < 1) {
+    if (std::abs(last_vel[i]) < 1 && std::abs(err) < 3) { // better positioning
       kp = 40;
-    } else if (last_vel[i] < 5) {
+    } else if (std::abs(last_vel[i]) < 1 && std::abs(err) < 5) {
+      kp = 30;
+    } else if (std::abs(last_vel[i]) < 3 && std::abs(err) < 10) {
       kp = 20;
     } else {
       kp = 10;
+    }
+
+    if (std::abs(last_vel[i]) < 1 && std::abs(err) < 3) { // better positioning
+      ki = 1;
+    } else {
+      ki = 0;
+      i_out[i] = 0;
     }
 
     float p_out = kp * err;
@@ -278,6 +292,9 @@ void dualMotorSetup() {
 }
 
 void dualMotorUpdatePos(uint16_t pos[]) {
+  if (!torque_enabled) {
+    setupTorque(1);
+  }
   for (int i = 0; i < JOINT_NUM; ++i) {
     if (traj[i].trajectory_done_) {
       traj[i].planTrapezoidal(pos[i], last_pos[i], last_vel[i]);
