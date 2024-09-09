@@ -203,22 +203,22 @@ void loop() {
     }
   }
 
-  // uint32_t this_action_time = millis();
-  // if (this_action_time - last_action_time > 10) { // 每隔 10ms执行一次
-  //   last_action_time = this_action_time;
+  uint32_t this_action_time = millis();
+  if (this_action_time - last_action_time > 10) { // 每隔 10ms执行一次
+    last_action_time = this_action_time;
 
-  //   // Serial.println("No ctrl");
+    // Serial.println("No ctrl");
 
-  //   uint16_t pos[8];
-  //   ++feedback_cnt;
-  //   dualMotorReadPos(pos);
+    uint16_t pos[8];
+    ++feedback_cnt;
+    dualMotorReadPos(pos);
 
-  //   for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
-  //   comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
+    for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
+    comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
 
-  //   // follower 已经10ms没有收到信号了
-  //   ;
-  // }
+    // follower 已经10ms没有收到信号了
+    ;
+  }
 
   uint32_t this_stat_time = millis();
   if (this_stat_time - last_stat_time > 1000) {
