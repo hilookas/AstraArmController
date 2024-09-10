@@ -7,7 +7,7 @@
 
 SMS_STS sts;
 
-#define TIMER_TIMEOUT_US 15000
+#define TIMER_TIMEOUT_US 15000 // change: current_meas_period
 // velocity update in servo seems at 50Hz.
 
 esp_timer_handle_t timer;
@@ -105,6 +105,7 @@ void doSetupTorque(int enable) {
       traj[i].trajectory_done_ = true;
     }
     dualMotorUpdatePos(pos);
+    Serial.println("setup torque");
   } else if (enable == 128) {
     int init_pos0[4 * JOINT_NUM];
     for (int i = 0; i < 4 * JOINT_NUM; ++i) {
@@ -178,7 +179,8 @@ void timer_callback(void *arg) {
 
   float goal_pos[JOINT_NUM];
   for (int i = 0; i < JOINT_NUM; ++i) {
-    goal_pos[i] = traj[i].update();
+    traj[i].update();
+    goal_pos[i] = traj[i].pos_setpoint_;
   }
 
   float kp = 10, kd = 0, ki = 0.4;
@@ -190,17 +192,17 @@ void timer_callback(void *arg) {
     float err = goal_pos[i] - last_pos[i];
 
     if (std::abs(last_vel[i]) < 1 && std::abs(err) < 3) { // better positioning
-      kp = 40;
+      kp = 20;
     } else if (std::abs(last_vel[i]) < 1 && std::abs(err) < 5) {
-      kp = 30;
+      kp = 20;
     } else if (std::abs(last_vel[i]) < 3 && std::abs(err) < 10) {
       kp = 20;
     } else {
       kp = 10;
     }
 
-    if (std::abs(last_vel[i]) < 1 && std::abs(err) < 3) { // better positioning
-      ki = 1;
+    if (std::abs(last_vel[i]) < 3 && std::abs(err) < 10) { // better positioning
+      ki = 2;
     } else {
       ki = 0;
       i_out[i] = 0;
@@ -210,7 +212,14 @@ void timer_callback(void *arg) {
     i_out[i] += ki * err;
     float d_out = kd * (err - last_err[i]);
 
-    out[i] = p_out + i_out[i] + d_out;
+    float sticktion_compensation = 0;
+    if (err > 0) {
+      sticktion_compensation = 80;
+    } else {
+      sticktion_compensation = -80;
+    }
+
+    out[i] = sticktion_compensation + p_out + i_out[i] + d_out;
 
     last_err[i] = err;
   }
@@ -277,10 +286,14 @@ void dualMotorSetup() {
   
   sts.writeWord(15, SMS_STS_TORQUE_LIMIT_L, 500); // Protect servo
 
+  read_pos();
+
   for (int i = 0; i < JOINT_NUM; ++i) {
-    traj[i].config_.vel_limit = config.joint_vel_max;
-    traj[i].config_.accel_limit = config.joint_acc;
-    traj[i].config_.decel_limit = config.joint_acc;
+    // traj[i].config_.vel_limit = config.joint_vel_max;
+    // traj[i].config_.accel_limit = config.joint_acc;
+    // traj[i].config_.decel_limit = config.joint_acc;
+    traj[i].Xf_ = last_pos[i];
+    traj[i].pos_setpoint_ = last_pos[i];
   }
 
   // https://github.com/espressif/esp-idf/blob/v5.2.2/examples/system/esp_timer/main/esp_timer_example_main.c
@@ -296,12 +309,7 @@ void dualMotorUpdatePos(uint16_t pos[]) {
     setupTorque(1);
   }
   for (int i = 0; i < JOINT_NUM; ++i) {
-    if (traj[i].trajectory_done_) {
-      traj[i].planTrapezoidal(pos[i], last_pos[i], last_vel[i]);
-    } else {
-      TrapezoidalTrajectory::Step_t traj_step = traj[i].eval(traj[i].t_);
-      traj[i].planTrapezoidal(pos[i], traj_step.Y, traj_step.Yd);
-    }
+    traj[i].planTrapezoidal(pos[i], traj[i].pos_setpoint_, traj[i].vel_setpoint_);
   }
 
   for (int i = 0; i < NONE_JOINT_NUM; ++i) {

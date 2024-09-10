@@ -142,13 +142,13 @@ void loop() {
         }
         cmd[1] = FLOAT_TO_U32(config.EIShaper_ctrl_freq);;
       } else if (cmd[0] == 0x05) {
-        config.joint_vel_max = (cmd[1]);
+        config.joint_vel_max = U32_TO_FLOAT(cmd[1]);
         write_config();
-        cmd[1] = (config.joint_vel_max);
+        cmd[1] = FLOAT_TO_U32(config.joint_vel_max);
       } else if (cmd[0] == 0x06) {
-        config.joint_acc = (cmd[1]);
+        config.joint_acc = U32_TO_FLOAT(cmd[1]);
         write_config();
-        cmd[1] = (config.joint_acc);
+        cmd[1] = FLOAT_TO_U32(config.joint_acc);
       } else if (cmd[0] == 0x07) {
         config.joint_backlash_compensate_feedforward = (cmd[1]);
         write_config();
@@ -182,9 +182,9 @@ void loop() {
       } else if (cmd[0] == 0x04) {
         cmd[1] = FLOAT_TO_U32(config.EIShaper_ctrl_freq);
       } else if (cmd[0] == 0x05) {
-        cmd[1] = (config.joint_vel_max);
+        cmd[1] = FLOAT_TO_U32(config.joint_vel_max);
       } else if (cmd[0] == 0x06) {
-        cmd[1] = (config.joint_acc);
+        cmd[1] = FLOAT_TO_U32(config.joint_acc);
       } else if (cmd[0] == 0x07) {
         cmd[1] = (config.joint_backlash_compensate_feedforward);
       } else if (cmd[0] == 0x08) {

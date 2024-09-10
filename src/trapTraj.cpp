@@ -106,11 +106,13 @@ TrapezoidalTrajectory::Step_t TrapezoidalTrajectory::eval(float t) {
     return trajStep;
 }
 
-float TrapezoidalTrajectory::update() {
-    float pos_setpoint_, vel_setpoint_, torque_setpoint_;
+void TrapezoidalTrajectory::update() {
     // Avoid updating uninitialized trajectory
-    if (trajectory_done_)
-        return Xf_;
+    if (trajectory_done_) {
+        pos_setpoint_ = Xf_;
+        vel_setpoint_ = 0.0f;
+        torque_setpoint_ = 0.0f;
+    }
     
     if (t_ > Tf_) {
         // Drop into position control mode when done to avoid problems on loop counter delta overflow
@@ -125,5 +127,4 @@ float TrapezoidalTrajectory::update() {
         torque_setpoint_ = traj_step.Ydd * config_.inertia;
         t_ += config_.current_meas_period;
     }
-    return pos_setpoint_;
 }

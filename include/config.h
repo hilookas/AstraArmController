@@ -10,8 +10,8 @@ struct config_t {
   float EIShaper_V = 0.05;
   float EIShaper_ctrl_freq = 48;
 
-  float joint_vel_max = 400.f;
-  float joint_acc = 400.f;
+  float joint_vel_max = 800.f;
+  float joint_acc = 800.f;
   int joint_backlash_compensate_feedforward = 200; // 200 pwm
 
   int non_joint_vel_max = 32766;
