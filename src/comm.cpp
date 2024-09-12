@@ -65,12 +65,17 @@ bool comm_send_blocking(comm_type_t type, const uint8_t payload[]) {
   bool ret;
   ret = serial_send_blocking(0x5A); // 0b01011010 as header
   if (ret) return true;
+  uint8_t checksum = 0;
+  checksum += (uint8_t)type;
   ret = serial_send_blocking((uint8_t)type); // 0b01011010 as header
   if (ret) return true;
   for (int i = 0; i < comm_payload_size[type]; ++i) {
+    checksum += payload[i];
     ret = serial_send_blocking(payload[i]);
     if (ret) return true;
   }
+  ret = serial_send_blocking(checksum);
+  if (ret) return true;
   return false;
 }
 
