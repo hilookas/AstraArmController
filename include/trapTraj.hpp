@@ -5,8 +5,8 @@ class TrapezoidalTrajectory {
 public:
     struct Config_t {
         float vel_limit = 3200.0f;   // [step/s]
-        float accel_limit = 3200.0f; // [step/s^2]
-        float decel_limit = 3200.0f; // [step/s^2]
+        float accel_limit = 800.0f; // [step/s^2]
+        float decel_limit = 800.0f; // [step/s^2]
         float inertia = 0;
         float current_meas_period = 0.01; // TIMER_TIMEOUT_US -> s
     };

@@ -59,7 +59,7 @@ void read_pos() {
   float vel[JOINT_NUM + NONE_JOINT_NUM];
   for (int i = 0; i < JOINT_NUM + NONE_JOINT_NUM; ++i) {
     vel[i] = (pos[i] - last_pos[i]) / TIMER_TIMEOUT_US * 1000000;
-    float filter = 0.01;
+    float filter = 0.2;
     vel[i] = vel[i] * filter + last_vel[i] * (1 - filter);
     last_pos[i] = pos[i];
     last_vel[i] = vel[i];
@@ -103,6 +103,8 @@ void doSetupTorque(int enable) {
     }
     for (int i = 0; i < JOINT_NUM; ++i) {
       traj[i].trajectory_done_ = true;
+      traj[i].Xf_ = pos[i];
+      traj[i].pos_setpoint_ = pos[i];
     }
     dualMotorUpdatePos(pos);
     Serial.println("setup torque");
@@ -183,40 +185,56 @@ void timer_callback(void *arg) {
     goal_pos[i] = traj[i].pos_setpoint_;
   }
 
-  float kp = 10, kd = 0, ki = 0.4;
+  float kp = 8, kd = 20, ki = 10;
 
   static float last_err[JOINT_NUM];
   static float i_out[JOINT_NUM] = {};
   float out[JOINT_NUM] = {};
+  float debug_signal[JOINT_NUM];
   for (int i = 0; i < JOINT_NUM; ++i) {
     float err = goal_pos[i] - last_pos[i];
 
-    if (std::abs(last_vel[i]) < 1 && std::abs(err) < 3) { // better positioning
-      kp = 20;
-    } else if (std::abs(last_vel[i]) < 1 && std::abs(err) < 5) {
-      kp = 20;
-    } else if (std::abs(last_vel[i]) < 3 && std::abs(err) < 10) {
-      kp = 20;
-    } else {
-      kp = 10;
-    }
+    // if (std::abs(last_vel[i]) < 10 && std::abs(err) < 3) { // better positioning
+    //   kp = 40;
+    // } else if (std::abs(last_vel[i]) < 10 && std::abs(err) < 5) {
+    //   kp = 30;
+    // } else if (std::abs(last_vel[i]) < 10 && std::abs(err) < 10) {
+    //   kp = 20;
+    // } else {
+    //   kp = 10;
+    // }
 
-    if (std::abs(last_vel[i]) < 3 && std::abs(err) < 10) { // better positioning
-      ki = 2;
-    } else {
-      ki = 0;
-      i_out[i] = 0;
-    }
+    // if (std::abs(last_vel[i]) < 10 && std::abs(err) < 15) { // better positioning
+    //   // kd = 16;
+    //   // ki = 4;
+    //   // debug_signal[i] = goal_pos[i] + 10;
+    // } else {
+    //   // ki = 0;
+    //   // kd = 0;
+    //   // // i_out[i] = i_out[i];
+    //   // debug_signal[i] = goal_pos[i] - 10;
+    // }
 
     float p_out = kp * err;
     i_out[i] += ki * err;
+    if (i_out[i] > 800) i_out[i] = 800;
+    if (i_out[i] < -800) i_out[i] = -800;
+    debug_signal[i] = goal_pos[i] - 10;
+    if (std::abs(last_vel[i]) > 10) {
+      i_out[i] = i_out[i] * 0.5;
+      debug_signal[i] = goal_pos[i] + 10;
+    }
     float d_out = kd * (err - last_err[i]);
 
-    float sticktion_compensation = 0;
-    if (err > 0) {
-      sticktion_compensation = 80;
-    } else {
-      sticktion_compensation = -80;
+    float sticktion_compensation = 70;
+    // float sticktion_compensation = 0;
+
+    if (err < 0) {
+      sticktion_compensation = -sticktion_compensation;
+    }
+
+    if (-1 < err && err < 1) {
+      sticktion_compensation = 0;
     }
 
     out[i] = sticktion_compensation + p_out + i_out[i] + d_out;
@@ -226,14 +244,21 @@ void timer_callback(void *arg) {
 
   float raw_out[4 * JOINT_NUM];
   for (int i = 0; i < JOINT_NUM; ++i) {
-    raw_out[i * 4] = out[i];
-    raw_out[i * 4 + 1] = -out[i];
-    raw_out[i * 4 + 2] = out[i];
-    raw_out[i * 4 + 3] = -out[i];
+    // float backlash_compensate_feedforward = config.joint_backlash_compensate_feedforward;
+    float backlash_compensate_feedforward = 0;
+    if (i == 0) {
+      backlash_compensate_feedforward = 150;
+    } else {
+      backlash_compensate_feedforward = 150;
+    }
+    raw_out[i * 4] = backlash_compensate_feedforward + out[i];
+    raw_out[i * 4 + 1] = backlash_compensate_feedforward + -out[i];
+    raw_out[i * 4 + 2] = backlash_compensate_feedforward + out[i];
+    raw_out[i * 4 + 3] = backlash_compensate_feedforward + -out[i];
   }
 
   for (int i = 0; i < 4 * JOINT_NUM; ++i) {
-    int ready_send = -(config.joint_backlash_compensate_feedforward + raw_out[i]); // Max: 1000 as servo document
+    int ready_send = -raw_out[i]; // Max: 1000 as servo document
     if (ready_send > 800) ready_send = 800;
     if (ready_send < -800) ready_send = -800;
     if (ready_send < 0) ready_send = -(ready_send) + 1024;
@@ -244,37 +269,45 @@ void timer_callback(void *arg) {
     sts.WritePosEx(4 + 4 * JOINT_NUM + i, none_joint_goal_pos[i], config.non_joint_vel_max, config.non_joint_acc);
   }
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(goal_pos[i]);
-  //   Serial.print(" ");
-  // }
-  // Serial.print("  ");
+  Serial.println();
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(last_pos[i]);
-  //   Serial.print(" ");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(goal_pos[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(last_vel[i]);
-  //   Serial.print(" ");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(last_pos[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(out[i]);
-  //   Serial.print(" ");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(debug_signal[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < 4 * JOINT_NUM; ++i) {
-  //   Serial.print(raw_out[i]);
-  //   Serial.print(" ");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(last_vel[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // Serial.println();
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(out[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
+
+  for (int i = 0; i < 4 * JOINT_NUM; ++i) {
+    Serial.print(raw_out[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
+
+  Serial.println("0");
 }
 
 void dualMotorSetup() {
@@ -292,8 +325,6 @@ void dualMotorSetup() {
     // traj[i].config_.vel_limit = config.joint_vel_max;
     // traj[i].config_.accel_limit = config.joint_acc;
     // traj[i].config_.decel_limit = config.joint_acc;
-    traj[i].Xf_ = last_pos[i];
-    traj[i].pos_setpoint_ = last_pos[i];
   }
 
   // https://github.com/espressif/esp-idf/blob/v5.2.2/examples/system/esp_timer/main/esp_timer_example_main.c
