@@ -185,35 +185,20 @@ void timer_callback(void *arg) {
     goal_pos[i] = traj[i].pos_setpoint_;
   }
 
-  float kp = 5, kd = 20, ki = 7;
+  float kp = 10, kd = 20, ki = 7;
 
   static float last_err[JOINT_NUM];
   static float i_out[JOINT_NUM] = {};
   float out[JOINT_NUM] = {};
   float debug_signal[JOINT_NUM];
+
+  // dithering to overcome coulomb friction
+  // Ref: https://ieeexplore.ieee.org/document/7139742
+  static float sticktion_compensation = 60;
+  sticktion_compensation = -sticktion_compensation;
+  
   for (int i = 0; i < JOINT_NUM; ++i) {
     float err = goal_pos[i] - last_pos[i];
-
-    // if (std::abs(last_vel[i]) < 10 && std::abs(err) < 3) { // better positioning
-    //   kp = 40;
-    // } else if (std::abs(last_vel[i]) < 10 && std::abs(err) < 5) {
-    //   kp = 30;
-    // } else if (std::abs(last_vel[i]) < 10 && std::abs(err) < 10) {
-    //   kp = 20;
-    // } else {
-    //   kp = 10;
-    // }
-
-    // if (std::abs(last_vel[i]) < 10 && std::abs(err) < 15) { // better positioning
-    //   // kd = 16;
-    //   // ki = 4;
-    //   // debug_signal[i] = goal_pos[i] + 10;
-    // } else {
-    //   // ki = 0;
-    //   // kd = 0;
-    //   // // i_out[i] = i_out[i];
-    //   // debug_signal[i] = goal_pos[i] - 10;
-    // }
 
     float p_out = kp * err;
     i_out[i] += ki * err;
@@ -226,17 +211,6 @@ void timer_callback(void *arg) {
     }
     float d_out = kd * (err - last_err[i]);
 
-    float sticktion_compensation = 60;
-    // float sticktion_compensation = 0;
-
-    if (err < 0) {
-      sticktion_compensation = -sticktion_compensation;
-    }
-
-    if (-1 < err && err < 1) {
-      sticktion_compensation = 0;
-    }
-
     out[i] = sticktion_compensation + p_out + i_out[i] + d_out;
 
     last_err[i] = err;
@@ -245,12 +219,7 @@ void timer_callback(void *arg) {
   float raw_out[4 * JOINT_NUM];
   for (int i = 0; i < JOINT_NUM; ++i) {
     // float backlash_compensate_feedforward = config.joint_backlash_compensate_feedforward;
-    float backlash_compensate_feedforward = 0;
-    if (i == 0) {
-      backlash_compensate_feedforward = 150;
-    } else {
-      backlash_compensate_feedforward = 150;
-    }
+    float backlash_compensate_feedforward = 150;
     raw_out[i * 4] = backlash_compensate_feedforward + out[i];
     raw_out[i * 4 + 1] = backlash_compensate_feedforward + -out[i];
     raw_out[i * 4 + 2] = backlash_compensate_feedforward + out[i];
@@ -269,45 +238,45 @@ void timer_callback(void *arg) {
     sts.WritePosEx(4 + 4 * JOINT_NUM + i, none_joint_goal_pos[i], config.non_joint_vel_max, config.non_joint_acc);
   }
 
-  // Serial.println();
+  Serial.println();
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(goal_pos[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(goal_pos[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(last_pos[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(last_pos[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(debug_signal[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(debug_signal[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(last_vel[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(last_vel[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(out[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(out[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < 4 * JOINT_NUM; ++i) {
-  //   Serial.print(raw_out[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < 4 * JOINT_NUM; ++i) {
+    Serial.print(raw_out[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // Serial.println("0");
+  Serial.println("0");
 }
 
 void dualMotorSetup() {
