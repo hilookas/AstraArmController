@@ -185,7 +185,7 @@ void timer_callback(void *arg) {
     goal_pos[i] = traj[i].pos_setpoint_;
   }
 
-  float kp = 8, kd = 20, ki = 10;
+  float kp = 5, kd = 20, ki = 7;
 
   static float last_err[JOINT_NUM];
   static float i_out[JOINT_NUM] = {};
@@ -226,7 +226,7 @@ void timer_callback(void *arg) {
     }
     float d_out = kd * (err - last_err[i]);
 
-    float sticktion_compensation = 70;
+    float sticktion_compensation = 60;
     // float sticktion_compensation = 0;
 
     if (err < 0) {
@@ -269,45 +269,45 @@ void timer_callback(void *arg) {
     sts.WritePosEx(4 + 4 * JOINT_NUM + i, none_joint_goal_pos[i], config.non_joint_vel_max, config.non_joint_acc);
   }
 
-  Serial.println();
+  // Serial.println();
 
-  for (int i = 0; i < JOINT_NUM; ++i) {
-    Serial.print(goal_pos[i]);
-    Serial.print(",");
-  }
-  Serial.print("  ");
+  // for (int i = 0; i < JOINT_NUM; ++i) {
+  //   Serial.print(goal_pos[i]);
+  //   Serial.print(",");
+  // }
+  // Serial.print("  ");
 
-  for (int i = 0; i < JOINT_NUM; ++i) {
-    Serial.print(last_pos[i]);
-    Serial.print(",");
-  }
-  Serial.print("  ");
+  // for (int i = 0; i < JOINT_NUM; ++i) {
+  //   Serial.print(last_pos[i]);
+  //   Serial.print(",");
+  // }
+  // Serial.print("  ");
 
-  for (int i = 0; i < JOINT_NUM; ++i) {
-    Serial.print(debug_signal[i]);
-    Serial.print(",");
-  }
-  Serial.print("  ");
+  // for (int i = 0; i < JOINT_NUM; ++i) {
+  //   Serial.print(debug_signal[i]);
+  //   Serial.print(",");
+  // }
+  // Serial.print("  ");
 
-  for (int i = 0; i < JOINT_NUM; ++i) {
-    Serial.print(last_vel[i]);
-    Serial.print(",");
-  }
-  Serial.print("  ");
+  // for (int i = 0; i < JOINT_NUM; ++i) {
+  //   Serial.print(last_vel[i]);
+  //   Serial.print(",");
+  // }
+  // Serial.print("  ");
 
-  for (int i = 0; i < JOINT_NUM; ++i) {
-    Serial.print(out[i]);
-    Serial.print(",");
-  }
-  Serial.print("  ");
+  // for (int i = 0; i < JOINT_NUM; ++i) {
+  //   Serial.print(out[i]);
+  //   Serial.print(",");
+  // }
+  // Serial.print("  ");
 
-  for (int i = 0; i < 4 * JOINT_NUM; ++i) {
-    Serial.print(raw_out[i]);
-    Serial.print(",");
-  }
-  Serial.print("  ");
+  // for (int i = 0; i < 4 * JOINT_NUM; ++i) {
+  //   Serial.print(raw_out[i]);
+  //   Serial.print(",");
+  // }
+  // Serial.print("  ");
 
-  Serial.println("0");
+  // Serial.println("0");
 }
 
 void dualMotorSetup() {
