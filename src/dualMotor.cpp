@@ -259,6 +259,12 @@ void timer_callback(void *arg) {
   Serial.print("  ");
 
   for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(traj[i].vel_setpoint_);
+    Serial.print(",");
+  }
+  Serial.print("  ");
+
+  for (int i = 0; i < JOINT_NUM; ++i) {
     Serial.print(last_vel[i]);
     Serial.print(",");
   }

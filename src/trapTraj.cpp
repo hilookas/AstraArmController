@@ -109,22 +109,18 @@ TrapezoidalTrajectory::Step_t TrapezoidalTrajectory::eval(float t) {
 void TrapezoidalTrajectory::update() {
     // Avoid updating uninitialized trajectory
     if (trajectory_done_) {
-        pos_setpoint_ = Xf_;
-        vel_setpoint_ = 0.0f;
-        torque_setpoint_ = 0.0f;
+        return;
     }
     
-    if (t_ > Tf_) {
+    t_ += config_.current_meas_period; // Must first add t_ then eval, otherwise we will repeat last setpoint once again, causing a mini plateau and make arm shake
+    
+    TrapezoidalTrajectory::Step_t traj_step = eval(t_);
+    pos_setpoint_ = traj_step.Y;
+    vel_setpoint_ = traj_step.Yd;
+    torque_setpoint_ = traj_step.Ydd * config_.inertia;
+
+    if (t_ >= Tf_) {
         // Drop into position control mode when done to avoid problems on loop counter delta overflow
-        pos_setpoint_ = Xf_;
-        vel_setpoint_ = 0.0f;
-        torque_setpoint_ = 0.0f;
         trajectory_done_ = true;
-    } else {
-        TrapezoidalTrajectory::Step_t traj_step = eval(t_);
-        pos_setpoint_ = traj_step.Y;
-        vel_setpoint_ = traj_step.Yd;
-        torque_setpoint_ = traj_step.Ydd * config_.inertia;
-        t_ += config_.current_meas_period;
     }
 }
