@@ -17,6 +17,7 @@ float last_pos[JOINT_NUM + NONE_JOINT_NUM] = { 2048, 2048, 2048, 2048, 2048, 204
 float last_vel[JOINT_NUM + NONE_JOINT_NUM] = { 0 };
 
 uint16_t none_joint_goal_pos[NONE_JOINT_NUM] = { 2048, 2048, 2048, 2048,  };
+uint16_t raw_goal_pos[JOINT_NUM] = { 2048, 2048,  };
 
 #define ACC 100
 #define MAX_VEL 10000
@@ -255,6 +256,12 @@ void timer_callback(void *arg) {
   // Serial.print("  ");
 
   // for (int i = 0; i < JOINT_NUM; ++i) {
+  //   Serial.print(raw_goal_pos[i]);
+  //   Serial.print(",");
+  // }
+  // Serial.print("  ");
+
+  // for (int i = 0; i < JOINT_NUM; ++i) {
   //   Serial.print(debug_signal[i]);
   //   Serial.print(",");
   // }
@@ -317,6 +324,7 @@ void dualMotorUpdatePos(uint16_t pos[]) {
     setupTorque(1);
   }
   for (int i = 0; i < JOINT_NUM; ++i) {
+    raw_goal_pos[i] = pos[i];
     traj[i].planTrapezoidal(pos[i], traj[i].pos_setpoint_, traj[i].vel_setpoint_);
   }
 
