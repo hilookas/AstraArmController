@@ -99,7 +99,7 @@ void loop() {
       dualMotorReadPos(pos);
 
       for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
-      comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
+      // comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
     } else if (type == COMM_TYPE_CONFIG_WRITE) {
       uint32_t cmd[2];
       memcpy(cmd, buf, sizeof cmd);
@@ -222,7 +222,7 @@ void loop() {
     dualMotorReadPos(pos);
 
     for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
-    comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
+    // comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
 
     // follower 已经10ms没有收到信号了
     ;

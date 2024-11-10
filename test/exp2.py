@@ -12,14 +12,23 @@ def generator(sample_T):
     mx = int(0x0800 + 0x300)
     t = 0
     T = 2 # s
-
-    while True:
-        # value = int((math.sin(2 * math.pi * t / T) + 1) / 2 * (mx - mn) + mn)
-        value = mx if math.sin(2 * math.pi * t / T) > 0 else mn
-        print(int(t * 1000), value)
+    
+    for vel in range(50, 2000, 100):     
+        print(vel)
         
-        yield value
-        t += sample_T
+        value = mn
+        while value < mx:
+            value += sample_T * vel
+            # print(int(t * 1000), value)
+            yield int(value)
+            t += sample_T
+        
+        value = mx
+        while value > mn:
+            value -= sample_T * vel
+            # print(int(t * 1000), value)
+            yield int(value)
+            t += sample_T
         
 
 if __name__ == '__main__':
@@ -28,6 +37,7 @@ if __name__ == '__main__':
     COMM_TYPE_PIDTUNE = 0x08
 
     ser = serial.Serial("COM4", 921600, timeout=None)
+    fd = open('data.txt', 'wb')
 
     def plot_thread():
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
@@ -36,6 +46,7 @@ if __name__ == '__main__':
             data = ser.read()
             sock.sendto(data, ("127.0.0.1", 10086))
             # sock.sendto(bytes(f"{11111}\n", "utf-8"), ("127.0.0.1", 10086))
+            fd.write(data)
 
     threading.Thread(target=plot_thread, daemon=True).start()
     
