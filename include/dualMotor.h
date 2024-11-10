@@ -14,4 +14,6 @@ void dualMotorReadPos(uint16_t read_pos[]);
 
 void setupTorque(int enable);
 
+extern float pidtune_kp, pidtune_ki, pidtune_kd;
+
 #endif

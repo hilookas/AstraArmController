@@ -163,6 +163,8 @@ void setupTorque(int enable) {
   updateSetupTorque = true;
 }
 
+float pidtune_kp = 10, pidtune_kd = 30, pidtune_ki = 7;
+
 void timer_callback(void *arg) {
   if (updateSetupTorque) {
     updateSetupTorque = false;
@@ -186,7 +188,7 @@ void timer_callback(void *arg) {
     goal_pos[i] = traj[i].pos_setpoint_;
   }
 
-  float kp = 10, kd = 20, ki = 7;
+  float kp = pidtune_kp, kd = pidtune_kd, ki = pidtune_ki;
 
   static float last_err[JOINT_NUM];
   static float i_out[JOINT_NUM] = {};
@@ -205,10 +207,10 @@ void timer_callback(void *arg) {
     i_out[i] += ki * err;
     if (i_out[i] > 800) i_out[i] = 800;
     if (i_out[i] < -800) i_out[i] = -800;
-    debug_signal[i] = goal_pos[i] - 10;
+    debug_signal[i] = 200;
     if (std::abs(last_vel[i]) > 10) {
       i_out[i] = i_out[i] * 0.5;
-      debug_signal[i] = goal_pos[i] + 10;
+      debug_signal[i] = 400;
     }
     float d_out = kd * (err - last_err[i]);
 
@@ -244,6 +246,12 @@ void timer_callback(void *arg) {
   // Serial.println();
 
   // for (int i = 0; i < JOINT_NUM; ++i) {
+  //   Serial.print(raw_goal_pos[i]);
+  //   Serial.print(",");
+  // }
+  // Serial.print("  ");
+
+  // for (int i = 0; i < JOINT_NUM; ++i) {
   //   Serial.print(goal_pos[i]);
   //   Serial.print(",");
   // }
@@ -256,19 +264,7 @@ void timer_callback(void *arg) {
   // Serial.print("  ");
 
   // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(raw_goal_pos[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
-
-  // for (int i = 0; i < JOINT_NUM; ++i) {
   //   Serial.print(debug_signal[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
-
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(traj[i].vel_setpoint_);
   //   Serial.print(",");
   // }
   // Serial.print("  ");

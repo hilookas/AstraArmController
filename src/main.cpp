@@ -69,7 +69,7 @@ void setup() {
 
 void loop() {
   comm_type_t type;
-  uint8_t buf[20];
+  uint8_t buf[COMM_PAYLOAD_SIZE_MAX];
   bool ret = comm_recv_poll_last(&type, buf);
 
   if (!ret) {
@@ -198,6 +198,14 @@ void loop() {
       for (int i = 0; i < 2; ++i) cmd[i] = htonl(cmd[i]);
       memcpy(buf, cmd, sizeof cmd);
       comm_send_blocking(COMM_TYPE_CONFIG_FEEDBACK, (uint8_t *)buf);
+    } else if (type == COMM_TYPE_PIDTUNE) {
+      uint32_t cmd[8];
+      memcpy(cmd, buf, sizeof cmd);
+      for (int i = 0; i < 8; ++i) cmd[i] = ntohl(cmd[i]);
+      Serial.printf("PIDTUNE kp=%.2f ki=%.2f kd=%.2f\n", U32_TO_FLOAT(cmd[0]), U32_TO_FLOAT(cmd[1]), U32_TO_FLOAT(cmd[2]));
+      pidtune_kp = U32_TO_FLOAT(cmd[0]);
+      pidtune_ki = U32_TO_FLOAT(cmd[1]);
+      pidtune_kd = U32_TO_FLOAT(cmd[2]);
     } else {
       Serial.println("Unknown comm type");
     }

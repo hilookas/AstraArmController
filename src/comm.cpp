@@ -42,6 +42,7 @@ int comm_payload_size[] = {
   16, // COMM_TYPE_CONFIG_WRITE
   16, // COMM_TYPE_CONFIG_READ
   16, // COMM_TYPE_CONFIG_FEEDBACK
+  32, // COMM_TYPE_PIDTUNE
 };
 
 // 不能被忽略的数据包
@@ -56,6 +57,7 @@ bool comm_type_importance[] = {
   true,  // COMM_TYPE_CONFIG_WRITE
   true,  // COMM_TYPE_CONFIG_READ
   true,  // COMM_TYPE_CONFIG_FEEDBACK
+  true,  // COMM_TYPE_PIDTUNE
 };
 
 // 堵塞发送一个数据包
