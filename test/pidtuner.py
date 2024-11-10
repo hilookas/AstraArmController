@@ -9,9 +9,9 @@ class PIDTuner:
         self.root.title("PID Tuner")
 
         # 设置初始PID值
-        self.p_val = tk.DoubleVar(value=10.0)
-        self.i_val = tk.DoubleVar(value=0.0)
-        self.d_val = tk.DoubleVar(value=30.0)
+        self.p_val = tk.DoubleVar(value=7.0)
+        self.i_val = tk.DoubleVar(value=1.0)
+        self.d_val = tk.DoubleVar(value=26.0)
 
         # 创建P滑块
         self.create_slider("P", self.p_val, 0, 80, 0)

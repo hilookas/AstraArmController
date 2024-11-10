@@ -8,10 +8,10 @@ import math
 from pidtuner import PIDTunerRunner
 
 def generator(sample_T):
-    mn = int(0x0800 - 0x300)
-    mx = int(0x0800 + 0x300)
+    mn = int(0x0800 - 0x200)
+    mx = int(0x0800 + 0x200)
     t = 0
-    T = 2 # s
+    T = 4 # s
 
     while True:
         # value = int((math.sin(2 * math.pi * t / T) + 1) / 2 * (mx - mn) + mn)
@@ -57,6 +57,6 @@ if __name__ == '__main__':
     
         value = next(g)
     
-        ser.write(struct.pack('>BBHHHHHHxxxx', COMM_HEAD, COMM_TYPE_CTRL, *[value, 0x0C00, 0x0800, 0x0800, 0x0800, 0x0800]))
+        ser.write(struct.pack('>BBHHHHHHxxxx', COMM_HEAD, COMM_TYPE_CTRL, *[value, value, 0x0800, 0x0800, 0x0800, 0x0800]))
         
         time.sleep(sample_T)
