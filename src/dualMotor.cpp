@@ -188,14 +188,14 @@ void timer_callback(void *arg) {
     goal_pos[i] = traj[i].pos_setpoint_;
   }
 
-  static float last_goal_pos[JOINT_NUM];
-  static float last_goal_pos_inited = false;
-  if (!last_goal_pos_inited) {
-    for (int i = 0; i < JOINT_NUM; ++i) {
-      last_goal_pos[i] = goal_pos[i];
-    }
-    last_goal_pos_inited = true;
-  }
+  // static float last_goal_pos[JOINT_NUM];
+  // static float last_goal_pos_inited = false;
+  // if (!last_goal_pos_inited) {
+  //   for (int i = 0; i < JOINT_NUM; ++i) {
+  //     last_goal_pos[i] = goal_pos[i];
+  //   }
+  //   last_goal_pos_inited = true;
+  // }
 
   float kp = pidtune_kp, kd = pidtune_kd, ki = pidtune_ki;
 
@@ -212,10 +212,10 @@ void timer_callback(void *arg) {
   for (int i = 0; i < JOINT_NUM; ++i) {
     float err = goal_pos[i] - last_pos[i];
 
-    float goal_vel = goal_pos[i] - last_goal_pos[i];
-    last_goal_pos[i] = goal_pos[i];
+    // float goal_vel = goal_pos[i] - last_goal_pos[i];
+    // last_goal_pos[i] = goal_pos[i];
 
-    float friction_compensation = goal_vel * 0.30385482 + 61.1004804 * (goal_vel > 0 ? 1 : -1);
+    // float friction_compensation = goal_vel * 0.30385482 + 61.1004804 * (goal_vel > 0 ? 1 : -1);
 
     float p_out = kp * err;
     i_out[i] += ki * err;
@@ -228,7 +228,7 @@ void timer_callback(void *arg) {
     }
     float d_out = kd * (err - last_err[i]);
 
-    out[i] = friction_compensation + sticktion_compensation + p_out + i_out[i] + d_out;
+    out[i] = /*friction_compensation +*/ sticktion_compensation + p_out + i_out[i] + d_out;
 
     last_err[i] = err;
   }
