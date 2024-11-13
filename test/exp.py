@@ -8,8 +8,8 @@ import math
 from pidtuner import PIDTunerRunner
 
 def generator(sample_T):
-    mn = int(0x0800 - 0x200)
-    mx = int(0x0800 + 0x200)
+    mn = int(0x0800 - 0x200 * 0.5)
+    mx = int(0x0800 + 0x200 * 0.5)
     t = 0
     T = 4 # s
 
@@ -50,10 +50,12 @@ if __name__ == '__main__':
             p = pidtuner.app.p
             i = pidtuner.app.i
             d = pidtuner.app.d
+            i_clip_thres = pidtuner.app.i_clip_thres
+            i_clip_coef = pidtuner.app.i_clip_coef
             # Racing condition
-            print(f"Updated: P: {p:.2f}, I: {i:.2f}, D: {d:.2f}")
+            print(f"Updated: P: {p:.2f}, I: {i:.2f}, D: {d:.2f}, i_clip_thres: {i_clip_thres:.2f}, i_clip_coef: {i_clip_coef:.2f}")
             pidtuner.app.updated = False
-            ser.write(struct.pack('>BBffffffff', COMM_HEAD, COMM_TYPE_PIDTUNE, *[p, i, d, 0, 0, 0, 0, 0]))
+            ser.write(struct.pack('>BBffffffff', COMM_HEAD, COMM_TYPE_PIDTUNE, *[p, i, d, i_clip_thres, i_clip_coef, 0, 0, 0]))
     
         value = next(g)
     

@@ -99,7 +99,7 @@ void loop() {
       dualMotorReadPos(pos);
 
       for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
-      comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
+      // comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
     } else if (type == COMM_TYPE_CONFIG_WRITE) {
       uint32_t cmd[2];
       memcpy(cmd, buf, sizeof cmd);
@@ -206,6 +206,8 @@ void loop() {
       pidtune_kp = U32_TO_FLOAT(cmd[0]);
       pidtune_ki = U32_TO_FLOAT(cmd[1]);
       pidtune_kd = U32_TO_FLOAT(cmd[2]);
+      pidtune_ki_clip_thres = U32_TO_FLOAT(cmd[3]);
+      pidtune_ki_clip_coef = U32_TO_FLOAT(cmd[4]);
     } else {
       Serial.println("Unknown comm type");
     }
@@ -222,7 +224,7 @@ void loop() {
     dualMotorReadPos(pos);
 
     for (int i = 0; i < 6; ++i) pos[i] = htons(pos[i]);
-    comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
+    // comm_send_blocking(COMM_TYPE_FEEDBACK, (uint8_t *)pos);
 
     // follower 已经10ms没有收到信号了
     ;
