@@ -11,11 +11,11 @@ def generator(sample_T):
     mn = int(0x0800 - 0x200 * 0.5)
     mx = int(0x0800 + 0x200 * 0.5)
     t = 0
-    T = 4 # s
+    T = 2 # s
 
     while True:
-        # value = int((math.sin(2 * math.pi * t / T) + 1) / 2 * (mx - mn) + mn)
-        value = mx if math.sin(2 * math.pi * t / T) > 0 else mn
+        value = int((math.sin(2 * math.pi * t / T) + 1) / 2 * (mx - mn) + mn)
+        # value = mx if math.sin(2 * math.pi * t / T) > 0 else mn
         print(int(t * 1000), value)
         
         yield value
