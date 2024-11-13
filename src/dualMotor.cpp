@@ -163,7 +163,7 @@ void setupTorque(int enable) {
   updateSetupTorque = true;
 }
 
-float pidtune_kp = 7, pidtune_kd = 26, pidtune_ki = 1;
+float pidtune_kp = 10, pidtune_kd = 20, pidtune_ki = 7, pidtune_ki_clip_thres = 10, pidtune_ki_clip_coef = 0.5;
 
 void timer_callback(void *arg) {
   if (updateSetupTorque) {
@@ -214,16 +214,17 @@ void timer_callback(void *arg) {
 
     float goal_vel = goal_pos[i] - last_goal_pos[i];
     float friction_compensation = goal_vel * 0.30385482 + 61.1004804 * (goal_vel > 0 ? 1 : -1);
+    last_goal_pos[i] = goal_pos[i];
 
     float p_out = kp * err;
     i_out[i] += ki * err;
     if (i_out[i] > 800) i_out[i] = 800;
     if (i_out[i] < -800) i_out[i] = -800;
-    // debug_signal[i] = 200;
-    // if (std::abs(last_vel[i]) > 10) {
-    //   i_out[i] = i_out[i] * 0.5;
-    //   debug_signal[i] = 400;
-    // }
+    debug_signal[i] = 200;
+    if (std::abs(last_vel[i]) > pidtune_ki_clip_thres) {
+      i_out[i] = i_out[i] * pidtune_ki_clip_coef;
+      debug_signal[i] = 400;
+    }
     float d_out = kd * (err - last_err[i]);
 
     out[i] = friction_compensation + sticktion_compensation + p_out + i_out[i] + d_out;
@@ -255,51 +256,51 @@ void timer_callback(void *arg) {
 
   // In timer thread, Racing condition with main thread
 
-  // Serial.println();
+  Serial.println();
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(raw_goal_pos[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(raw_goal_pos[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(goal_pos[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(goal_pos[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(last_pos[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(last_pos[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(debug_signal[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(debug_signal[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(last_vel[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(last_vel[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < JOINT_NUM; ++i) {
-  //   Serial.print(out[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < JOINT_NUM; ++i) {
+    Serial.print(out[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // for (int i = 0; i < 4 * JOINT_NUM; ++i) {
-  //   Serial.print(raw_out[i]);
-  //   Serial.print(",");
-  // }
-  // Serial.print("  ");
+  for (int i = 0; i < 4 * JOINT_NUM; ++i) {
+    Serial.print(raw_out[i]);
+    Serial.print(",");
+  }
+  Serial.print("  ");
 
-  // Serial.println("0");
+  Serial.println("0");
 }
 
 void dualMotorSetup() {

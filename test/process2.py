@@ -17,6 +17,8 @@ datas = []
 with open("data.csv", "r") as f:
     last_pos = None
     last_vel = 0.0
+    
+    last_vel2 = 0
     for line in f:
         df = [float(num.strip()) for num in line.split(",")]
         if last_pos:
@@ -27,12 +29,22 @@ with open("data.csv", "r") as f:
         last_pos = df[2]
         last_vel = vel
         
-        if abs(acc) < 100:
-            df.extend([vel, acc]) # 13 14
-            datas.append(df)
+        acc2 = (df[8] - last_vel2) / (TIMER_TIMEOUT_US / 1000000)
+        last_vel2 = df[8]
+        
+        if vel < 0:
+            df[10] -= 0.30385482 * vel - 61.1004804
+        else:
+            df[10] -= 0.30385482 * vel + 61.1004804
+        
+        # if abs(acc) > 100:
+        df.extend([vel, acc, acc2]) # 13 14 15
+        datas.append(df)
 
+# print(datas)
 datas = np.array(datas)
-print(datas.shape)
+
+plt.scatter(datas[:,15], datas[:,10], c='none', marker='o', edgecolors='b') # 前馈加速度-扭矩
 
 # plt.plot(datas[:,13]) # 前馈速度
 
@@ -41,21 +53,21 @@ print(datas.shape)
 # plt.scatter(datas[:,13], datas[:,10]) # 前馈速度-扭矩
 # plt.scatter(datas[:,8], datas[:,10]) # 反馈速度-扭矩
 
-vels = []
-tors = []
-for vel, tor in zip(datas[:,13], datas[:,10]): # 前馈速度-扭矩
-    if vel < 0:
-        vel = -vel
-        tor = -tor
-    vels.append(vel)
-    tors.append(tor)
+# vels = []
+# tors = []
+# for vel, tor in zip(datas[:,13], datas[:,10]): # 前馈速度-扭矩
+#     # if vel < 0:
+#     #     vel = -vel
+#     #     tor = -tor
+#     vels.append(vel)
+#     tors.append(tor)
 
-fit_poly = np.polyfit(vels, tors, 1)
+fit_poly = np.polyfit(datas[:,14], datas[:,10], 1)
 print(fit_poly) # [ 0.30385482 61.1004804 ]
 
-plt.scatter(vels, tors, c='none', marker='o', edgecolors='b')
-plt.plot(range(0, 1500, 1), np.polyval(fit_poly, range(0, 1500, 1)), 'r')
-plt.plot(range(0, 1500, 1), np.polyval(fit_poly, range(0, 1500, 1)) + 60, 'r', linestyle='--')
-plt.plot(range(0, 1500, 1), np.polyval(fit_poly, range(0, 1500, 1)) - 60, 'r', linestyle='--')
+# plt.scatter(vels, tors, c='none', marker='o', edgecolors='b')
+plt.plot(range(-8000, 8000, 10), np.polyval(fit_poly, range(-8000, 8000, 10)), 'r')
+# plt.plot(range(0, 1500, 1), np.polyval(fit_poly, range(0, 1500, 1)) + 60, 'r', linestyle='--')
+# plt.plot(range(0, 1500, 1), np.polyval(fit_poly, range(0, 1500, 1)) - 60, 'r', linestyle='--')
 
 plt.show()

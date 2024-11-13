@@ -9,9 +9,11 @@ class PIDTuner:
         self.root.title("PID Tuner")
 
         # 设置初始PID值
-        self.p_val = tk.DoubleVar(value=7.0)
-        self.i_val = tk.DoubleVar(value=1.0)
-        self.d_val = tk.DoubleVar(value=26.0)
+        self.p_val = tk.DoubleVar(value=10.0)
+        self.i_val = tk.DoubleVar(value=7.0)
+        self.d_val = tk.DoubleVar(value=20.0)
+        self.i_clip_thres_val = tk.DoubleVar(value=10.0)
+        self.i_clip_coef_val = tk.DoubleVar(value=0.5)
 
         # 创建P滑块
         self.create_slider("P", self.p_val, 0, 80, 0)
@@ -21,16 +23,21 @@ class PIDTuner:
         
         # 创建D滑块
         self.create_slider("D", self.d_val, 0, 80, 2)
+        
+        self.create_slider("i_clip_thres", self.i_clip_thres_val, 0, 100, 3)
+        self.create_slider("i_clip_coef", self.i_clip_coef_val, 0, 1, 4)
 
         # 显示PID值标签
         self.label = tk.Label(self.root, text="")
         self.update_label()
-        self.label.grid(row=3, column=0, columnspan=2, pady=10)
+        self.label.grid(row=5, column=0, columnspan=2, pady=10)
 
         # 绑定更新事件
         self.p_val.trace("w", self.update_label)
         self.i_val.trace("w", self.update_label)
         self.d_val.trace("w", self.update_label)
+        self.i_clip_thres_val.trace("w", self.update_label)
+        self.i_clip_coef_val.trace("w", self.update_label)
         
         self.updated = False
 
@@ -49,7 +56,9 @@ class PIDTuner:
         self.p = self.p_val.get()
         self.i = self.i_val.get()
         self.d = self.d_val.get()
-        self.label.config(text=f"P: {self.p:.2f}, I: {self.i:.2f}, D: {self.d:.2f}")
+        self.i_clip_thres = self.i_clip_thres_val.get()
+        self.i_clip_coef = self.i_clip_coef_val.get()
+        self.label.config(text=f"P: {self.p:.2f}, I: {self.i:.2f}, D: {self.d:.2f}, i_clip_thres: {self.i_clip_thres:.2f}, i_clip_coef: {self.i_clip_coef:.2f}")
         
         self.updated = True
 
@@ -75,6 +84,6 @@ if __name__ == "__main__":
         print("Main thread running other tasks...")
         if pidtuner.app and pidtuner.app.updated:
             # Racing condition
-            print(f"P: {pidtuner.app.p:.2f}, I: {pidtuner.app.i:.2f}, D: {pidtuner.app.d:.2f}")
+            print(f"P: {pidtuner.app.p:.2f}, I: {pidtuner.app.i:.2f}, D: {pidtuner.app.d:.2f}, i_clip_thres: {pidtuner.app.i_clip_thres:.2f}, i_clip_coef: {pidtuner.app.i_clip_coef:.2f}")
             pidtuner.app.updated = False
         time.sleep(2)  # 模拟其他任务的执行
