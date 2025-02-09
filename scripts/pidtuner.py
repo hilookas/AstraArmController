@@ -43,7 +43,7 @@ class PIDTuner:
         self.i_clip_thres_val.trace("w", self.update_label)
         self.i_clip_coef_val.trace("w", self.update_label)
         
-        self.updated = False
+        self.updated = True
 
     def create_slider(self, name, variable, min_val, max_val, row):
         """创建一个滑块"""
@@ -116,6 +116,25 @@ def generator_sin_wave(sample_T):
         yield value
         t += sample_T
 
+def generator_square_wave(sample_T):
+    mn = int(0x0800 - 0x200 * 0.5)
+    mx = int(0x0800 + 0x200 * 0.5)
+    
+    T = 4 # s
+    
+    while True:
+        t = 0
+
+        while t < T / 2:
+            value = mn
+            yield value
+            t += sample_T
+
+        while t < T:
+            value = mx
+            yield value
+            t += sample_T
+
 if __name__ == '__main__':
     COMM_HEAD = 0x5A
     COMM_TYPE_CTRL = 0x02
@@ -141,7 +160,8 @@ if __name__ == '__main__':
 
     sample_T = 0.02
     
-    g = generator_sin_wave(sample_T)
+    # g = generator_sin_wave(sample_T)
+    g = generator_square_wave(sample_T)
     
     try:
         while True:
@@ -159,7 +179,8 @@ if __name__ == '__main__':
             value = next(g)
         
             # ser.write(struct.pack('>BBHHHHHHxxxx', COMM_HEAD, COMM_TYPE_CTRL, *[value, 0x0C00, 0x0800, 0x0800, 0x0800, 0x0800])) # 1 joint
-            ser.write(struct.pack('>BBHHHHHHxxxx', COMM_HEAD, COMM_TYPE_CTRL, *[value, value, 0x0800, 0x0800, 0x0800, 0x0800])) # 2 joint 
+            # ser.write(struct.pack('>BBHHHHHHxxxx', COMM_HEAD, COMM_TYPE_CTRL, *[value, value, 0x0800, 0x0800, 0x0800, 0x0800])) # 2 joint
+            ser.write(struct.pack('>BBHHHHHHxxxx', COMM_HEAD, COMM_TYPE_CTRL, *[value, 0x0800, 0x0800, 0x0800, 0x0800, 0x0800]))
             
             time.sleep(sample_T)
     

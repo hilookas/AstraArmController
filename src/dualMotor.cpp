@@ -301,7 +301,7 @@ void timer_callback(void *arg) {
   // }
   // Serial.print("  ");
 
-  // Serial.println("0");
+  // Serial.println(millis());
 }
 
 void dualMotorSetup() {
