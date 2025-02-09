@@ -2,6 +2,10 @@ import tkinter as tk
 from tkinter import ttk
 import threading
 import time
+import math
+import struct
+import serial
+import socket
 
 class PIDTuner:
     def __init__(self):
@@ -75,15 +79,92 @@ class PIDTunerRunner:
         self.app = PIDTuner()
         self.app.root.mainloop()
 
-if __name__ == "__main__":
+def generator_sweep_wave(sample_T):
+    mn = int(0x0800 - 0x300)
+    mx = int(0x0800 + 0x300)
+    t = 0
+    T = 2 # s
+    
+    for vel in range(50, 2000, 100):     
+        print(vel)
+        
+        value = mn
+        while value < mx:
+            value += sample_T * vel
+            # print(int(t * 1000), value)
+            yield int(value)
+            t += sample_T
+        
+        value = mx
+        while value > mn:
+            value -= sample_T * vel
+            # print(int(t * 1000), value)
+            yield int(value)
+            t += sample_T
+
+def generator_sin_wave(sample_T):
+    mn = int(0x0800 - 0x200 * 0.5)
+    mx = int(0x0800 + 0x200 * 0.5)
+    t = 0
+    T = 2 # s
+
+    while True:
+        value = int((math.sin(2 * math.pi * t / T) + 1) / 2 * (mx - mn) + mn)
+        # value = mx if math.sin(2 * math.pi * t / T) > 0 else mn
+        print(int(t * 1000), value)
+        
+        yield value
+        t += sample_T
+
+if __name__ == '__main__':
+    COMM_HEAD = 0x5A
+    COMM_TYPE_CTRL = 0x02
+    COMM_TYPE_PIDTUNE = 0x08
+    COMM_TYPE_TORQUE = 0x04
+
+    ser = serial.Serial("/dev/tty_puppet_right", 921600, timeout=None)
+    fd = open('data.txt', 'wb')
+
+    def plot_thread():
+        # use vofa
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+
+        while True:
+            data = ser.read()
+            sock.sendto(data, ("192.168.1.14", 10086))
+            # sock.sendto(bytes(f"{11111}\n", "utf-8"), ("127.0.0.1", 10086))
+            fd.write(data)
+
+    threading.Thread(target=plot_thread, daemon=True).start()
+    
     pidtuner = PIDTunerRunner()
 
-    # 主线程可以执行其他任务
-    while True:
-        # 这里可以放主线程的其他任务代码
-        print("Main thread running other tasks...")
-        if pidtuner.app and pidtuner.app.updated:
-            # Racing condition
-            print(f"P: {pidtuner.app.p:.2f}, I: {pidtuner.app.i:.2f}, D: {pidtuner.app.d:.2f}, i_clip_thres: {pidtuner.app.i_clip_thres:.2f}, i_clip_coef: {pidtuner.app.i_clip_coef:.2f}")
-            pidtuner.app.updated = False
-        time.sleep(2)  # 模拟其他任务的执行
+    sample_T = 0.02
+    
+    g = generator_sin_wave(sample_T)
+    
+    try:
+        while True:
+            if pidtuner.app and pidtuner.app.updated:
+                p = pidtuner.app.p
+                i = pidtuner.app.i
+                d = pidtuner.app.d
+                i_clip_thres = pidtuner.app.i_clip_thres
+                i_clip_coef = pidtuner.app.i_clip_coef
+                # Racing condition
+                print(f"Updated: P: {p:.2f}, I: {i:.2f}, D: {d:.2f}, i_clip_thres: {i_clip_thres:.2f}, i_clip_coef: {i_clip_coef:.2f}")
+                pidtuner.app.updated = False
+                ser.write(struct.pack('>BBffffffff', COMM_HEAD, COMM_TYPE_PIDTUNE, *[p, i, d, i_clip_thres, i_clip_coef, 0, 0, 0]))
+        
+            value = next(g)
+        
+            # ser.write(struct.pack('>BBHHHHHHxxxx', COMM_HEAD, COMM_TYPE_CTRL, *[value, 0x0C00, 0x0800, 0x0800, 0x0800, 0x0800])) # 1 joint
+            ser.write(struct.pack('>BBHHHHHHxxxx', COMM_HEAD, COMM_TYPE_CTRL, *[value, value, 0x0800, 0x0800, 0x0800, 0x0800])) # 2 joint 
+            
+            time.sleep(sample_T)
+    
+    except KeyboardInterrupt:
+        ser.write(struct.pack('>BBBxxxxxxxxxxxxxxx', COMM_HEAD, COMM_TYPE_TORQUE, 0))
+        ser.flush()
+        ser.close()
+        fd.close()
