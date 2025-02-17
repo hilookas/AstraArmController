@@ -163,7 +163,7 @@ void setupTorque(int enable) {
   updateSetupTorque = true;
 }
 
-float pidtune_kp = 10, pidtune_kd = 20, pidtune_ki = 7, pidtune_ki_clip_thres = 10, pidtune_ki_clip_coef = 0.5;
+float pidtune_kp = 10, pidtune_kd = 20, pidtune_ki = 7, pidtune_ki_max = 800, pidtune_ki_clip_thres = 10, pidtune_ki_clip_coef = 0.5;
 
 void timer_callback(void *arg) {
   if (updateSetupTorque) {
@@ -219,8 +219,8 @@ void timer_callback(void *arg) {
 
     float p_out = kp * err;
     i_out[i] += ki * err;
-    if (i_out[i] > 800) i_out[i] = 800;
-    if (i_out[i] < -800) i_out[i] = -800;
+    if (i_out[i] > pidtune_ki_max) i_out[i] = pidtune_ki_max;
+    if (i_out[i] < -pidtune_ki_max) i_out[i] = -pidtune_ki_max;
     debug_signal[i] = 200;
     if (std::abs(last_vel[i]) > pidtune_ki_clip_thres) {
       i_out[i] = i_out[i] * pidtune_ki_clip_coef;
@@ -230,8 +230,19 @@ void timer_callback(void *arg) {
 
     out[i] = /*friction_compensation +*/ sticktion_compensation + p_out + i_out[i] + d_out;
 
+    // Serial.print(p_out);
+    // Serial.print(",");
+    // Serial.print(i_out[i]);
+    // Serial.print(",");
+    // Serial.print(d_out);
+    // Serial.print(",");
+    // Serial.print(out[i]);
+    // Serial.print(",");
+    // Serial.print("  ");
+
     last_err[i] = err;
   }
+  // Serial.println(millis());
 
   float raw_out[4 * JOINT_NUM];
   for (int i = 0; i < JOINT_NUM; ++i) {

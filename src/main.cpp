@@ -206,6 +206,7 @@ void loop() {
       pidtune_kp = U32_TO_FLOAT(cmd[0]);
       pidtune_ki = U32_TO_FLOAT(cmd[1]);
       pidtune_kd = U32_TO_FLOAT(cmd[2]);
+      pidtune_ki_max = U32_TO_FLOAT(cmd[5]);
       pidtune_ki_clip_thres = U32_TO_FLOAT(cmd[3]);
       pidtune_ki_clip_coef = U32_TO_FLOAT(cmd[4]);
     } else {
