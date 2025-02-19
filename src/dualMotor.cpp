@@ -163,12 +163,46 @@ void setupTorque(int enable) {
   updateSetupTorque = true;
 }
 
+int initJoint_id = 0;
+int initJoint_offset = 0;
+bool updateInitJoint = false;
+
+void doInitJoint(int id, int offset) {
+  Serial.printf("INIT_JOINT id=%d offset=%d\n", id, offset);
+
+  sts.EnableTorque(id, 128);
+  Serial.printf("Set current position as mid\n");
+
+  sts.unLockEprom(id);//unlock EPROM-SAFE
+  int offset_servo = sts.readWord(id, SMS_STS_OFS_L);
+  Serial.printf("Offset in servo: %d\n", offset_servo);
+  offset_servo += offset;
+  if (offset_servo < 0) offset_servo += 4096;
+  if (offset_servo >= 4096) offset_servo -= 4096;
+  sts.writeWord(id, SMS_STS_OFS_L, offset_servo);
+  sts.LockEprom(id);//EPROM-SAFE locked
+
+  offset_servo = sts.readWord(id, SMS_STS_OFS_L);
+  Serial.printf("Updated offset in servo: %d\n", offset_servo);
+}
+
+void initJoint(int id, int offset) {
+  initJoint_id = id;
+  initJoint_offset = offset;
+  updateInitJoint = true;
+}
+
 float pidtune_kp = 10, pidtune_kd = 20, pidtune_ki = 7, pidtune_ki_max = 800, pidtune_ki_clip_thres = 10, pidtune_ki_clip_coef = 0.5;
 
 void timer_callback(void *arg) {
   if (updateSetupTorque) {
     updateSetupTorque = false;
     doSetupTorque(setupTorque_enable);
+  }
+
+  if (updateInitJoint) {
+    updateInitJoint = false;
+    doInitJoint(initJoint_id, initJoint_offset);
   }
 
   if (!torque_enabled) {

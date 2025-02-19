@@ -8,6 +8,8 @@
 #include "dualMotor.h"
 #include "config.h"
 
+extern SMS_STS sts;
+
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels, 32 as default.
 #define OLED_RESET -1 // Reset pin # (or -1 if sharing Arduino reset pin)
@@ -66,6 +68,7 @@ void setup() {
 
 #define FLOAT_TO_U32(x) (*(uint32_t *)&(x))
 #define U32_TO_FLOAT(x) (*(float *)&(x))
+#define U32_TO_I32(x) (*(int *)&(x))
 
 void loop() {
   comm_type_t type;
@@ -209,6 +212,15 @@ void loop() {
       pidtune_ki_max = U32_TO_FLOAT(cmd[5]);
       pidtune_ki_clip_thres = U32_TO_FLOAT(cmd[3]);
       pidtune_ki_clip_coef = U32_TO_FLOAT(cmd[4]);
+    } else if (type == COMM_TYPE_INIT_JOINT) {
+      uint32_t cmd[4];
+      memcpy(cmd, buf, sizeof cmd);
+      for (int i = 0; i < 4; ++i) cmd[i] = ntohl(cmd[i]);
+
+      int id = cmd[0];
+      int offset = U32_TO_I32(cmd[1]);
+
+      initJoint(id, offset);
     } else {
       Serial.println("Unknown comm type");
     }
