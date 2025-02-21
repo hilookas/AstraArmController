@@ -184,6 +184,9 @@ void loop() {
       last_pong_time = millis();
     } else if (type == COMM_TYPE_TORQUE) {
       setupTorque(buf[0]);
+      if (buf[0] == 0) {
+        have_last_pos_cmd = false;
+      }
     } else if (type == COMM_TYPE_CTRL) {
       last_action_time = millis();
 
