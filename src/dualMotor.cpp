@@ -60,8 +60,10 @@ void read_pos() {
   float vel[JOINT_NUM + NONE_JOINT_NUM];
   for (int i = 0; i < JOINT_NUM + NONE_JOINT_NUM; ++i) {
     vel[i] = (pos[i] - last_pos[i]) / TIMER_TIMEOUT_US * 1000000;
-    float filter = 0.2;
-    vel[i] = vel[i] * filter + last_vel[i] * (1 - filter);
+    float filter_vel = 0.2;
+    vel[i] = vel[i] * filter_vel + last_vel[i] * (1 - filter_vel);
+    // float filter_pos = 0.15860013531; // 1 / (1 + 1 / (2 * pi * f * TIMER_TIMEOUT_S))
+    // pos[i] = pos[i] * filter_pos + last_pos[i] * (1 - filter_pos);
     last_pos[i] = pos[i];
     last_vel[i] = vel[i];
   }
@@ -192,7 +194,7 @@ void initJoint(int id, int offset) {
   updateInitJoint = true;
 }
 
-float pidtune_kp = 10, pidtune_kd = 20, pidtune_ki = 7, pidtune_ki_max = 800, pidtune_ki_clip_thres = 10, pidtune_ki_clip_coef = 0.5;
+float pidtune_kp = 0, pidtune_kd = 0, pidtune_ki = 0, pidtune_ki_max = 800, pidtune_kp2 = 0, pidtune_kp2_err_point = 0, pidtune_ki_clip_thres = 10, pidtune_ki_clip_coef = 0.5;
 
 void timer_callback(void *arg) {
   if (updateSetupTorque) {
@@ -231,7 +233,7 @@ void timer_callback(void *arg) {
   //   last_goal_pos_inited = true;
   // }
 
-  float kp = pidtune_kp, kd = pidtune_kd, ki = pidtune_ki;
+  float kp = pidtune_kp, kd = pidtune_kd, ki = pidtune_ki, kp2 = pidtune_kp2, kp2_err_point = pidtune_kp2_err_point;
 
   static float last_err[JOINT_NUM];
   static float i_out[JOINT_NUM] = {};
@@ -251,15 +253,15 @@ void timer_callback(void *arg) {
 
     // float friction_compensation = goal_vel * 0.30385482 + 61.1004804 * (goal_vel > 0 ? 1 : -1);
 
-    float p_out = kp * err;
+    float p_out = kp * err + (kp2 - kp) * (err > kp2_err_point ? err - kp2_err_point : 0) + (kp2 - kp) * (err < -kp2_err_point ? err + kp2_err_point : 0);
     i_out[i] += ki * err;
     if (i_out[i] > pidtune_ki_max) i_out[i] = pidtune_ki_max;
     if (i_out[i] < -pidtune_ki_max) i_out[i] = -pidtune_ki_max;
-    debug_signal[i] = 200;
-    if (std::abs(last_vel[i]) > pidtune_ki_clip_thres) {
-      i_out[i] = i_out[i] * pidtune_ki_clip_coef;
-      debug_signal[i] = 400;
-    }
+    // debug_signal[i] = 200;
+    // if (std::abs(last_vel[i]) > pidtune_ki_clip_thres) {
+    //   i_out[i] = i_out[i] * pidtune_ki_clip_coef;
+    //   debug_signal[i] = 400;
+    // }
     float d_out = kd * (err - last_err[i]);
 
     out[i] = /*friction_compensation +*/ sticktion_compensation + p_out + i_out[i] + d_out;

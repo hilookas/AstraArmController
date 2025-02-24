@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 if __name__ == '__main__':
-    experiment_directory = 'experiment_result_sinewave_backlash_disabled_aggressive_pid'
+    experiment_directory = 'experiment_result'
     
     timestamps = []
     raw_goal_pos = []
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     ax1.plot(timestamps, real_pos)
     ax1.set_xlabel("Timestamps")
     ax1.set_ylabel("Position (deg)")
-    ax1.set_title("Position")
+    # ax1.set_title("Position")
     ax1.legend(["Raw Goal Position", "Smoothed Goal Position", "Real Position"], loc='upper right')
     fig1.savefig(f"{experiment_directory}/position.pdf")
     
@@ -56,6 +56,17 @@ if __name__ == '__main__':
     ax2.plot(timestamps, real_pos - smoothed_goal_pos)
     ax2.set_xlabel("Timestamps")
     ax2.set_ylabel("Position Error (deg)")
-    ax2.set_title("Position Error")
+    # ax2.set_title("Position Error")
     ax2.legend(["Position Error"], loc='upper right')
     fig2.savefig(f"{experiment_directory}/position_error.pdf")
+
+    fig3 = plt.figure()
+    ax3 = fig3.add_subplot(111)
+    ax3.set_ylim(-5, 5)
+    ax3.plot(timestamps, (real_pos - smoothed_goal_pos) / 360 * 4096)
+    ax3.plot(timestamps, np.zeros_like(timestamps), 'k--')
+    ax3.set_xlabel("Timestamps")
+    ax3.set_ylabel("Position Error (4096 counts)")
+    # ax3.set_title("Position Error")
+    ax3.legend(["Position Error"], loc='upper right')
+    fig3.savefig(f"{experiment_directory}/position_error2.pdf")

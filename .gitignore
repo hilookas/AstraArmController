@@ -6,5 +6,5 @@
 __pycache__
 data*
 Figure*
-experiment_result_*
+experiment_result*
 *.pdf
