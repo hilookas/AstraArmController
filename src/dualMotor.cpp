@@ -177,14 +177,20 @@ void doInitJoint(int id, int offset) {
 
   sts.unLockEprom(id);//unlock EPROM-SAFE
   int offset_servo = sts.readWord(id, SMS_STS_OFS_L);
+  if (offset_servo > 2048) offset_servo = -(offset_servo - 2048);
   Serial.printf("Offset in servo: %d\n", offset_servo);
-  offset_servo += offset;
-  if (offset_servo < 0) offset_servo += 4096;
-  if (offset_servo >= 4096) offset_servo -= 4096;
+
+  offset_servo -= offset;
+
+  if (offset_servo < -2048) offset_servo += 4096;
+  if (offset_servo >= 2048) offset_servo -= 4096;
+  
+  if (offset_servo < 0) offset_servo = -(offset_servo) + 2048;
   sts.writeWord(id, SMS_STS_OFS_L, offset_servo);
   sts.LockEprom(id);//EPROM-SAFE locked
 
   offset_servo = sts.readWord(id, SMS_STS_OFS_L);
+  if (offset_servo > 2048) offset_servo = -(offset_servo - 2048);
   Serial.printf("Updated offset in servo: %d\n", offset_servo);
 }
 
