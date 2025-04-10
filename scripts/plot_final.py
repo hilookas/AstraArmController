@@ -15,10 +15,9 @@ if __name__ == '__main__':
     ax1.set_xlabel("Time (s)")
     ax1.set_ylabel("Position (deg)")
     # ax1.set_title("Square Wave Result with Backlash Compensation")
-    ax1.legend(["Goal", "Disabled", "Enabled"], loc='upper left')
-    fig1.savefig(f"backlash_squarewave_position.pdf")
-    # half height 
+    ax1.legend(["Goal", "Disabled", "Enabled"], loc='upper right', fontsize=7)
     fig1.set_size_inches(fig1.get_size_inches() * 0.5)
+    fig1.savefig(f"backlash_squarewave_position.pdf", bbox_inches="tight", pad_inches=0)
     
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111)
@@ -27,8 +26,9 @@ if __name__ == '__main__':
     ax2.set_xlabel("Time (s)")
     ax2.set_ylabel("Position Error (deg)")
     # ax2.set_title("Square Wave Result with Backlash Compensation")
-    ax2.legend(["Disabled", "Enabled"], loc='upper left')
-    fig2.savefig(f"backlash_squarewave_error.pdf")
+    ax2.legend(["Disabled", "Enabled"], loc='upper right', fontsize=7)
+    fig2.set_size_inches(fig2.get_size_inches() * 0.5)
+    fig2.savefig(f"backlash_squarewave_error.pdf", bbox_inches="tight", pad_inches=0)
     
     
     
@@ -44,8 +44,9 @@ if __name__ == '__main__':
     ax1.set_xlabel("Time (s)")
     ax1.set_ylabel("Position (deg)")
     # ax1.set_title("Square Wave Result with Backlash Compensation")
-    ax1.legend(["Goal", "Disabled", "Enabled"], loc='upper right')
-    fig1.savefig(f"backlash_sinewave_position.pdf")
+    ax1.legend(["Goal", "Disabled", "Enabled"], loc='upper right', fontsize=7)
+    fig1.set_size_inches(fig1.get_size_inches() * 0.5)
+    fig1.savefig(f"backlash_sinewave_position.pdf", bbox_inches="tight", pad_inches=0)
     
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111)
@@ -54,8 +55,9 @@ if __name__ == '__main__':
     ax2.set_xlabel("Time (s)")
     ax2.set_ylabel("Position Error (deg)")
     # ax2.set_title("Square Wave Result with Backlash Compensation")
-    ax2.legend(["Disabled", "Enabled"], loc='upper right')
-    fig2.savefig(f"backlash_sinewave_error.pdf")
+    ax2.legend(["Disabled", "Enabled"], loc='upper right', fontsize=7)
+    fig2.set_size_inches(fig2.get_size_inches() * 0.5)
+    fig2.savefig(f"backlash_sinewave_error.pdf", bbox_inches="tight", pad_inches=0)
 
 
 
@@ -71,8 +73,9 @@ if __name__ == '__main__':
     ax1.set_xlabel("Time (s)")
     ax1.set_ylabel("Position (deg)")
     # ax1.set_title("Square Wave Result with Backlash Compensation")
-    ax1.legend(["Goal", "Disabled", "Enabled"], loc='upper left')
-    fig1.savefig(f"stiction_stairwave_position.pdf")
+    ax1.legend(["Goal", "Disabled", "Enabled"], loc='upper right', fontsize=7)
+    fig1.set_size_inches(fig1.get_size_inches() * 0.5)
+    fig1.savefig(f"stiction_stairwave_position.pdf", bbox_inches="tight", pad_inches=0)
     
     fig2 = plt.figure()
     ax2 = fig2.add_subplot(111)
@@ -81,5 +84,6 @@ if __name__ == '__main__':
     ax2.set_xlabel("Time (s)")
     ax2.set_ylabel("Position Error (deg)")
     # ax2.set_title("Square Wave Result with Backlash Compensation")
-    ax2.legend(["Disabled", "Enabled"], loc='upper left')
-    fig2.savefig(f"stiction_stairwave_error.pdf")
+    ax2.legend(["Disabled", "Enabled"], loc='upper right', fontsize=7)
+    fig2.set_size_inches(fig2.get_size_inches() * 0.5)
+    fig2.savefig(f"stiction_stairwave_error.pdf", bbox_inches="tight", pad_inches=0)
