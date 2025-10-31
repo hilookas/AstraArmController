@@ -43,7 +43,6 @@ int comm_payload_size[] = {
   16, // COMM_TYPE_CONFIG_READ
   16, // COMM_TYPE_CONFIG_FEEDBACK
   32, // COMM_TYPE_PIDTUNE
-  16, // COMM_TYPE_INIT_JOINT
 };
 
 // 不能被忽略的数据包
@@ -59,7 +58,6 @@ bool comm_type_importance[] = {
   true,  // COMM_TYPE_CONFIG_READ
   true,  // COMM_TYPE_CONFIG_FEEDBACK
   true,  // COMM_TYPE_PIDTUNE
-  true, // COMM_TYPE_INIT_JOINT
 };
 
 // 堵塞发送一个数据包
@@ -137,7 +135,7 @@ bool comm_recv_poll(comm_type_t *type, uint8_t payload[]) {
 // 但是必要的丢包是值得的，否则缓冲区会被堆积，实时性无法得到保证
 bool comm_recv_poll_last(comm_type_t *type, uint8_t payload[]) {
   bool last_ret = true; // 默认为没有数据（发生错误）
-  
+
   bool ret = comm_recv_poll(type, payload);
   while (!ret) {
     if (comm_type_importance[*type]) { // 不能被忽略的数据包

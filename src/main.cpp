@@ -45,7 +45,7 @@ void setup() {
   InitScreen();
 
   configInit();
-  
+
   dualMotorSetup();
 
   setupTorque(0);
@@ -214,15 +214,6 @@ void loop() {
       pidtune_ki_clip_thres = U32_TO_FLOAT(cmd[3]);
       pidtune_ki_clip_coef = U32_TO_FLOAT(cmd[4]);
       Serial.printf("PIDTUNE kp=%.2f ki=%.2f kd=%.2f ki_max=%.2f kp2=%.2f kp2_err_point=%.2f ki_clip_thres=%.2f ki_clip_coef=%.2f\n", pidtune_kp, pidtune_ki, pidtune_kd, pidtune_ki_max, pidtune_kp2, pidtune_kp2_err_point, pidtune_ki_clip_thres, pidtune_ki_clip_coef);
-    } else if (type == COMM_TYPE_INIT_JOINT) {
-      uint32_t cmd[4];
-      memcpy(cmd, buf, sizeof cmd);
-      for (int i = 0; i < 4; ++i) cmd[i] = ntohl(cmd[i]);
-
-      int id = cmd[0];
-      int offset = U32_TO_I32(cmd[1]);
-
-      initJoint(id, offset);
     } else {
       Serial.println("Unknown comm type");
     }

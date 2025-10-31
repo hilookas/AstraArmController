@@ -37,7 +37,7 @@ void read_pos() {
       Serial.print("Error reading #"); Serial.print(4 + 4 * JOINT_NUM + i); Serial.print(", checkout your wire connection"); Serial.println();
     }
   }
-  
+
   // Zero offest
   for (int i = 0; i < 4 * JOINT_NUM; ++i) {
     raw_pos[i] -= config.init_pos[i];
@@ -46,7 +46,7 @@ void read_pos() {
     raw_pos[i] += 2048;
     if (raw_pos[i] >= 4096) raw_pos[i] -= 4096;
   }
-  
+
   // average load into 4 servo
   float pos[JOINT_NUM + NONE_JOINT_NUM];
   for (int i = 0; i < JOINT_NUM; ++i) {
@@ -56,7 +56,7 @@ void read_pos() {
   for (int i = 0; i < NONE_JOINT_NUM; ++i) {
     pos[JOINT_NUM + i] = raw_pos_non_joint[i];
   }
-  
+
   float vel[JOINT_NUM + NONE_JOINT_NUM];
   for (int i = 0; i < JOINT_NUM + NONE_JOINT_NUM; ++i) {
     vel[i] = (pos[i] - last_pos[i]) / TIMER_TIMEOUT_US * 1000000;
@@ -67,6 +67,31 @@ void read_pos() {
     last_pos[i] = pos[i];
     last_vel[i] = vel[i];
   }
+}
+
+void doInitJoint(int id, int offset) {
+  Serial.printf("INIT_JOINT id=%d offset=%d\n", id, offset);
+
+  sts.EnableTorque(id, 128);
+  Serial.printf("Set current position as mid\n");
+
+  sts.unLockEprom(id);//unlock EPROM-SAFE
+  int offset_servo = sts.readWord(id, SMS_STS_OFS_L);
+  if (offset_servo > 2048) offset_servo = -(offset_servo - 2048);
+  Serial.printf("Offset in servo: %d\n", offset_servo);
+
+  offset_servo -= offset;
+
+  if (offset_servo < -2048) offset_servo += 4096;
+  if (offset_servo >= 2048) offset_servo -= 4096;
+
+  if (offset_servo < 0) offset_servo = -(offset_servo) + 2048;
+  sts.writeWord(id, SMS_STS_OFS_L, offset_servo);
+  sts.LockEprom(id);//EPROM-SAFE locked
+
+  offset_servo = sts.readWord(id, SMS_STS_OFS_L);
+  if (offset_servo > 2048) offset_servo = -(offset_servo - 2048);
+  Serial.printf("Updated offset in servo: %d\n", offset_servo);
 }
 
 bool torque_enabled = false;
@@ -80,7 +105,7 @@ void doSetupTorque(int enable) {
   } else if (enable == 1) {
     torque_enabled = true;
   }
-  
+
   for (int i = 0; i < NONE_JOINT_NUM; ++i) {
     sts.EnableTorque(4 + 4 * JOINT_NUM + i, enable);
   }
@@ -93,7 +118,7 @@ void doSetupTorque(int enable) {
     for (int i = 0; i < 4 * JOINT_NUM; ++i) {
       sts.EnableTorque(4 + i, enable);
     }
-    
+
     for (int i = 0; i < JOINT_NUM + NONE_JOINT_NUM; ++i) {
       last_vel[i] = 0;
     }
@@ -112,15 +137,24 @@ void doSetupTorque(int enable) {
     dualMotorUpdatePos(pos);
     Serial.println("setup torque");
   } else if (enable == 128) {
+    doInitJoint(15, 1448); // 1448 / 4096 * 2 * 3.14 * 0.027 / 2 == 0.030m == 30mm # setup gripper
+
+    for (int i = 0; i < 4 * JOINT_NUM; ++i) {
+      sts.unLockEprom(4 + i); //unlock EPROM-SAFE
+      // sts.PWMMode(4 + i)
+      sts.writeByte(4 + i, 0x21, 2); // set mode to PWM
+      sts.LockEprom(4 + i); //EPROM-SAFE locked
+    }
+
     int init_pos0[4 * JOINT_NUM];
     for (int i = 0; i < 4 * JOINT_NUM; ++i) {
       init_pos0[i] = sts.ReadPos(4 + i);
-      if (!(50 < init_pos0[i] && init_pos0[i] < 4096 - 50)) {
+      if (!(20 < init_pos0[i] && init_pos0[i] < 4096 - 20)) {
         Serial.print("Maybe cause wrong init_pos0, check power status, or reinstall the servo #"); Serial.print(i); Serial.println();
         while (1) ;
       }
     }
-    
+
     // preload
     for (int i = 0; i < 4 * JOINT_NUM; ++i) {
       sts.writeWord(4 + i, SCSCL_GOAL_TIME_L, config.joint_backlash_compensate_feedforward);
@@ -128,7 +162,7 @@ void doSetupTorque(int enable) {
 
     // wait for stable
     sleep(1);
-    
+
     int init_pos1[4 * JOINT_NUM];
     for (int i = 0; i < 4 * JOINT_NUM; ++i) {
       init_pos1[i] = sts.ReadPos(4 + i);
@@ -141,7 +175,7 @@ void doSetupTorque(int enable) {
 
     // wait for stable
     sleep(1);
-    
+
     int init_pos2[4 * JOINT_NUM];
     for (int i = 0; i < 4 * JOINT_NUM; ++i) {
       init_pos2[i] = sts.ReadPos(4 + i);
@@ -165,52 +199,12 @@ void setupTorque(int enable) {
   updateSetupTorque = true;
 }
 
-int initJoint_id = 0;
-int initJoint_offset = 0;
-bool updateInitJoint = false;
-
-void doInitJoint(int id, int offset) {
-  Serial.printf("INIT_JOINT id=%d offset=%d\n", id, offset);
-
-  sts.EnableTorque(id, 128);
-  Serial.printf("Set current position as mid\n");
-
-  sts.unLockEprom(id);//unlock EPROM-SAFE
-  int offset_servo = sts.readWord(id, SMS_STS_OFS_L);
-  if (offset_servo > 2048) offset_servo = -(offset_servo - 2048);
-  Serial.printf("Offset in servo: %d\n", offset_servo);
-
-  offset_servo -= offset;
-
-  if (offset_servo < -2048) offset_servo += 4096;
-  if (offset_servo >= 2048) offset_servo -= 4096;
-  
-  if (offset_servo < 0) offset_servo = -(offset_servo) + 2048;
-  sts.writeWord(id, SMS_STS_OFS_L, offset_servo);
-  sts.LockEprom(id);//EPROM-SAFE locked
-
-  offset_servo = sts.readWord(id, SMS_STS_OFS_L);
-  if (offset_servo > 2048) offset_servo = -(offset_servo - 2048);
-  Serial.printf("Updated offset in servo: %d\n", offset_servo);
-}
-
-void initJoint(int id, int offset) {
-  initJoint_id = id;
-  initJoint_offset = offset;
-  updateInitJoint = true;
-}
-
 float pidtune_kp = 0, pidtune_kd = 0, pidtune_ki = 0, pidtune_ki_max = 800, pidtune_kp2 = 0, pidtune_kp2_err_point = 0, pidtune_ki_clip_thres = 10, pidtune_ki_clip_coef = 0.5;
 
 void timer_callback(void *arg) {
   if (updateSetupTorque) {
     updateSetupTorque = false;
     doSetupTorque(setupTorque_enable);
-  }
-
-  if (updateInitJoint) {
-    updateInitJoint = false;
-    doInitJoint(initJoint_id, initJoint_offset);
   }
 
   if (!torque_enabled) {
@@ -250,7 +244,7 @@ void timer_callback(void *arg) {
   // Ref: https://ieeexplore.ieee.org/document/7139742
   static float sticktion_compensation = 60;
   sticktion_compensation = -sticktion_compensation;
-  
+
   for (int i = 0; i < JOINT_NUM; ++i) {
     float err = goal_pos[i] - last_pos[i];
 
@@ -363,7 +357,7 @@ void dualMotorSetup() {
   Serial1.begin(1000000, SERIAL_8N1, S_RXD, S_TXD);
   while (!Serial1) delay(1);
   sts.pSerial = &Serial1;
-  
+
   sts.writeWord(15, SMS_STS_TORQUE_LIMIT_L, 500); // Protect servo
 
   read_pos();

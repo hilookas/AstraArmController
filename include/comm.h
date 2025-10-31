@@ -22,7 +22,6 @@ typedef enum {
   COMM_TYPE_CONFIG_READ,
   COMM_TYPE_CONFIG_FEEDBACK,
   COMM_TYPE_PIDTUNE,
-  COMM_TYPE_INIT_JOINT,
 } comm_type_t;
 
 extern int comm_payload_size[];
